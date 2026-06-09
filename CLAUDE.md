@@ -22,10 +22,12 @@ All build/run commands require Android Studio or the Android SDK with Gradle wra
 ./gradlew test --tests "com.example.carlauncher.ExampleTest"
 ```
 
+**Emulator:** Use API 34 (Android 14) x86_64 with Google Play. Do NOT use API 35 — `libmaplibre.so` in the current version is not 16 KB page-aligned and will fail to load on Android 15 emulators.
+
 ## Architecture
 Single-module app (`app/`). No multi-module split yet.
 
-**DI:** Hilt (`@HiltAndroidApp` on `CarLauncherApp`, `@AndroidEntryPoint` on `MainActivity`). All ViewModels injected via `@HiltViewModel`. Hilt modules live in `di/`.
+**DI:** Hilt (`@HiltAndroidApp` on `CarLauncherApp`, `@AndroidEntryPoint` on `MainActivity`). All ViewModels use `@HiltViewModel` + `@Inject constructor`. Hilt modules live in `di/` — only provide things that have no `@Inject constructor` (e.g. `FusedLocationProviderClient`). Classes with `@Inject constructor` get `@Singleton` directly on the class, not in a `@Provides` method.
 
 **UI layer:** Jetpack Compose throughout. Entry point is `MainActivity → CarLauncherTheme → LauncherScreen`. New screens/widgets go under `ui/` grouped by feature:
 ```
@@ -33,9 +35,9 @@ ui/
   launcher/   ← LauncherScreen + LauncherViewModel
   theme/      ← CarLauncherTheme, color tokens
   map/        ← MapWidget + MapViewModel
-  speed/      ← SpeedDisplay
-  music/      ← MusicWidget + MusicViewModel
-  dock/       ← DockBar
+  speed/      ← SpeedDisplay (planned)
+  music/      ← MusicWidget + MusicViewModel (planned)
+  dock/       ← DockBar (planned)
 ```
 
 **Theme:** `ui/theme/Theme.kt` defines `CarColorScheme` (dark, no light variant). Key colors: background `#0D0D0F`, surface `#1A1A1F`, primary (accent green) `#00C853`. Always use `MaterialTheme.colorScheme.*` tokens rather than hardcoded hex in new composables.
@@ -44,32 +46,34 @@ ui/
 
 **Manifest:** `MainActivity` has `HOME` + `DEFAULT` categories making it a system launcher. `screenOrientation="landscape"` + `windowSoftInputMode="adjustNothing"` are intentional and must not be changed.
 
+**Permissions:** Runtime location permission requested in `MainActivity.onCreate()` via `ActivityResultContracts.RequestMultiplePermissions`. `LocationRepository.startTracking()` catches `SecurityException` silently — UI stays on "Waiting for GPS..." if denied.
+
 ## GPS Pipeline (Module 2)
 Data flows unidirectionally:
 ```
 FusedLocationProviderClient (500 ms interval)
-  → LocationCallback
+  → LocationCallback  [runs on HandlerThread("location-thread") — NOT Main thread]
   → LocationProcessor.process(Location)
       → KalmanFilter  (2D lat/lng smoothing, Q = 3 m/s)
       → speed rolling average (last 3 samples)
-  → VehicleDisplayLocation  (DTO)
+  → VehicleDisplayLocation  (DTO, uses location.time for timestamp)
   → LocationRepository._vehicleLocation: MutableStateFlow
   → LauncherViewModel.vehicleLocation: StateFlow
   → LauncherScreen (collectAsStateWithLifecycle)
 ```
-- **`KalmanFilter`** — plain class, stateful (call `reset()` after GPS gap). When `variance < 0` it is uninitialized and passes the first fix through raw.
-- **`LocationRepository`** — `@Singleton`. Owns the `LocationCallback`. `startTracking()` / `stopTracking()` called by `LauncherViewModel` init/onCleared. Catches `SecurityException` silently if permission is missing — the UI stays on "Waiting for GPS...".
+- **`KalmanFilter`** — plain class, stateful. Call `reset()` after GPS gap. `variance < 0` = uninitialized, first fix passes raw.
+- **`LocationRepository`** — `@Singleton`. `startTracking()` / `stopTracking()` called by `LauncherViewModel` init/onCleared. Has `isTracking` guard against double registration. Callback runs on dedicated `HandlerThread` to keep Kalman processing off the Main thread.
 - **`LocationForegroundService`** — stub only, declared in manifest with `foregroundServiceType="location"`. Logic added in a later module.
-- Runtime location permission is **not yet requested** — needs `ActivityResultContracts.RequestPermission` wired into `MainActivity` in a future module.
-- **GPS update frequency is adaptive** — 500 ms at speed > 5 km/h, 5000 ms when parked. Use `shouldUpdateMarker()` with speed-based distance threshold before any MapLibre marker update.
+- **GPS update frequency is adaptive** — 500 ms at speed > 5 km/h, 5000 ms when parked (not yet implemented — fixed 500 ms for now). Use `shouldUpdateMarker()` with speed-based distance threshold before MapLibre marker updates.
 
-## Map Widget
-- **Renderer:** MapLibre GL Android SDK — open-source, no API keys, no costs.
-- **Tile data:** PMTiles format, sourced from Geofabrik (czech-republic). File stored locally on the tablet. Zero network traffic in production.
-- **Map matching:** Two-stage — offline SQLite R-tree snap first, OSRM API fallback when online.
-- **Marker animation:** `animateMarkerTo()` with 400 ms ValueAnimator + `lerpAngle()` for bearing. Cancel animator in `DisposableEffect` / `onDestroy`.
-- **Camera:** Follow mode with bearing rotation. Do not reset zoom on every location update.
-- MapLibre `MapView` lives inside `AndroidView` composable — never store `MapLibreMap` in Compose state.
+## Map Widget (Module 3)
+- **Renderer:** MapLibre GL Android SDK 11.0.1 — open-source, no API keys.
+- **Tile data:** PMTiles format, stored at `assets/maps/czech-republic.pmtiles`. File not yet present — style currently shows dark background only. Full road layers are defined in `map_style_dark.json` and will activate once the file is placed.
+- **Style:** `assets/style/map_style_dark.json`. Currently contains only a `background` layer (no sources) to avoid MapLibre failing on missing PMTiles. Restore full style once `czech-republic.pmtiles` is available.
+- **MapView lifecycle:** `MapView` requires `onCreate(null)` before `getMapAsync`. In `MapWidget`, this is called inside `remember { MapView(context).also { it.onCreate(null) } }`. `onStart()`/`onResume()` are replayed manually in `DisposableEffect` because the lifecycle may already be RESUMED when the composable first composes.
+- **MapLibre objects in Compose:** `MapLibreMap` and `GeoJsonSource` are stored in a plain `MapState` holder inside `remember {}` — **never in `mutableStateOf`** (not Compose-snapshot-safe, causes spurious recomposition).
+- **Camera updates:** Always use a single `CameraPosition.Builder` combining `.target()` + `.bearing()` in one `animateCamera()` call. Two sequential `animateCamera()` calls cancel each other.
+- **Marker animation:** `animateMarkerTo()` with 400 ms ValueAnimator + `lerpAngle()` for bearing (not yet implemented — direct `setGeoJson` for now).
 
 ## Design Reference
 The finalized UI design lives in `.claude/design/` (CarLauncher.html, app.jsx, widgets.jsx, icons.jsx).
@@ -83,34 +87,35 @@ Key layout values from the design:
 - GPS chip: 36 dp height, 14sp font
 
 ## Planned Modules (not yet implemented)
-- Runtime permission request for location
-- Map widget (MapLibre + PMTiles)
 - Speed display widget
 - Music/media widget (MediaSession API)
 - App dock (QUERY_ALL_PACKAGES permission already declared)
-- Debug tools: GPS overlay, CSV logger, GPX replay (DEBUG build only, wrapped in BuildConfig.DEBUG)
+- Debug tools: GPS overlay, CSV logger, GPX replay (DEBUG build only, wrapped in `BuildConfig.DEBUG`)
+- Adaptive GPS interval (500 ms moving / 5000 ms parked)
+- `shouldUpdateMarker()` speed-based threshold
+- `LocationRepository` interface for unit test mocking
 
 ## Subagents
-Specialist review instructions live in `.claude/agents/`. Load the relevant file when the task matches.
+Specialist review instructions live in `.claude/`. Load the relevant file when the task matches.
 
 | When Claude Code should load | File |
 |------------------------------|------|
-| Code review of any Kotlin/Compose file | `.claude/agents/subagent_01_code_review.md` |
-| Performance audit, GPS latency, FPS, jitter | `.claude/agents/subagent_02_performance.md` |
-| UI layout, tap targets, car-safe design check | `.claude/agents/subagent_03_uiux.md` |
-| Architecture decision, module boundaries, Hilt scope | `.claude/agents/subagent_04_architecture.md` |
+| Code review of any Kotlin/Compose file | `.claude/subagent_01_code_review.md` |
+| Performance audit, GPS latency, FPS, jitter | `.claude/subagent_02_performance.md` |
+| UI layout, tap targets, car-safe design check | `.claude/subagent_03_uiux.md` |
+| Architecture decision, module boundaries, Hilt scope | `.claude/subagent_04_architecture.md` |
 
 **Usage examples:**
 ```
 "Code review LocationRepository.kt"
-→ Load .claude/agents/subagent_01_code_review.md, then review the file.
+→ Load .claude/subagent_01_code_review.md, then review the file.
 
 "Performance audit of the GPS pipeline"
-→ Load .claude/agents/subagent_02_performance.md, then audit.
+→ Load .claude/subagent_02_performance.md, then audit.
 
 "UI/UX review of SpeedDisplay composable"
-→ Load .claude/agents/subagent_03_uiux.md, then review.
+→ Load .claude/subagent_03_uiux.md, then review.
 
 "Is this architecture correct for adding reverse geocoding?"
-→ Load .claude/agents/subagent_04_architecture.md, then advise.
+→ Load .claude/subagent_04_architecture.md, then advise.
 ```
