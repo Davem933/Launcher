@@ -122,6 +122,11 @@ fun MapWidget(
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
+        // Replay missed lifecycle events — Composable may compose when lifecycle
+        // is already STARTED or RESUMED, so the observer won't receive past events.
+        val state = lifecycleOwner.lifecycle.currentState
+        if (state.isAtLeast(Lifecycle.State.STARTED)) mapView.onStart()
+        if (state.isAtLeast(Lifecycle.State.RESUMED)) mapView.onResume()
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
