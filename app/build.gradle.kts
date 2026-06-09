@@ -64,4 +64,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
 
     implementation(libs.coroutines.android)
+
+    // MapLibre
+    implementation("org.maplibre.gl:android-sdk:11.0.1")
 }
