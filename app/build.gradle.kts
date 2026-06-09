@@ -58,6 +58,10 @@ dependencies {
 
     implementation(libs.hilt.android)
     kapt(libs.hilt.compiler)
+    implementation(libs.hilt.navigation.compose)
+
+    implementation(libs.play.services.location)
+    implementation(libs.androidx.lifecycle.runtime.compose)
 
     implementation(libs.coroutines.android)
 }
