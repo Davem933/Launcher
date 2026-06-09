@@ -18,7 +18,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
@@ -43,9 +42,9 @@ fun MapWidget(
     val lifecycleOwner = LocalLifecycleOwner.current
     val location by viewModel.vehicleLocation.collectAsStateWithLifecycle()
 
-    MapLibre.getInstance(context)
-
-    val mapView = remember { MapView(context) }
+    val mapView = remember {
+        MapView(context).also { it.onCreate(null) }
+    }
     var mapLibreMap by remember { mutableStateOf<MapLibreMap?>(null) }
     var vehicleSource by remember { mutableStateOf<GeoJsonSource?>(null) }
 
