@@ -7,9 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
@@ -18,6 +16,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
@@ -33,6 +32,12 @@ private const val MARKER_IMAGE_ID = "vehicle-marker"
 private const val VEHICLE_SOURCE_ID = "vehicle-source"
 private const val VEHICLE_LAYER_ID = "vehicle-layer"
 
+// Plain holder — keeps MapLibre objects out of Compose snapshot system
+private class MapState {
+    var map: MapLibreMap? = null
+    var source: GeoJsonSource? = null
+}
+
 @Composable
 fun MapWidget(
     modifier: Modifier = Modifier,
@@ -42,17 +47,14 @@ fun MapWidget(
     val lifecycleOwner = LocalLifecycleOwner.current
     val location by viewModel.vehicleLocation.collectAsStateWithLifecycle()
 
-    val mapView = remember {
-        MapView(context).also { it.onCreate(null) }
-    }
-    var mapLibreMap by remember { mutableStateOf<MapLibreMap?>(null) }
-    var vehicleSource by remember { mutableStateOf<GeoJsonSource?>(null) }
+    val mapView = remember { MapView(context).also { it.onCreate(null) } }
+    val mapState = remember { MapState() }
 
     AndroidView(
         factory = {
             mapView.apply {
                 getMapAsync { map ->
-                    mapLibreMap = map
+                    mapState.map = map
 
                     map.uiSettings.isScrollGesturesEnabled = false
                     map.uiSettings.isZoomGesturesEnabled = false
@@ -61,14 +63,12 @@ fun MapWidget(
                     map.uiSettings.isLogoEnabled = false
                     map.uiSettings.isAttributionEnabled = false
 
-                    map.setStyle(
-                        Style.Builder().fromUri(viewModel.mapStyle)
-                    ) { style ->
+                    map.setStyle(Style.Builder().fromUri(viewModel.mapStyle)) { style ->
                         style.addImage(MARKER_IMAGE_ID, createVehicleMarkerBitmap())
 
                         val source = GeoJsonSource(VEHICLE_SOURCE_ID)
                         style.addSource(source)
-                        vehicleSource = source
+                        mapState.source = source
 
                         style.addLayer(
                             SymbolLayer(VEHICLE_LAYER_ID, VEHICLE_SOURCE_ID)
@@ -91,21 +91,21 @@ fun MapWidget(
 
     LaunchedEffect(location) {
         val loc = location ?: return@LaunchedEffect
-        val map = mapLibreMap ?: return@LaunchedEffect
-        val source = vehicleSource ?: return@LaunchedEffect
+        val map = mapState.map ?: return@LaunchedEffect
+        val source = mapState.source ?: return@LaunchedEffect
 
-        val latLng = LatLng(loc.lat, loc.lng)
+        source.setGeoJson(Feature.fromGeometry(Point.fromLngLat(loc.lng, loc.lat)))
 
-        source.setGeoJson(
-            Feature.fromGeometry(Point.fromLngLat(loc.lng, loc.lat))
-        )
-
+        // Single animateCamera call combining position + bearing — two sequential calls
+        // cancel each other, so position would never animate correctly.
         map.animateCamera(
-            CameraUpdateFactory.newLatLngZoom(latLng, map.cameraPosition.zoom),
-            300
-        )
-        map.animateCamera(
-            CameraUpdateFactory.bearingTo(loc.bearingDeg.toDouble()),
+            CameraUpdateFactory.newCameraPosition(
+                CameraPosition.Builder()
+                    .target(LatLng(loc.lat, loc.lng))
+                    .zoom(map.cameraPosition.zoom)
+                    .bearing(loc.bearingDeg.toDouble())
+                    .build()
+            ),
             300
         )
     }
@@ -122,8 +122,6 @@ fun MapWidget(
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
-        // Replay missed lifecycle events — Composable may compose when lifecycle
-        // is already STARTED or RESUMED, so the observer won't receive past events.
         val state = lifecycleOwner.lifecycle.currentState
         if (state.isAtLeast(Lifecycle.State.STARTED)) mapView.onStart()
         if (state.isAtLeast(Lifecycle.State.RESUMED)) mapView.onResume()

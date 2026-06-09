@@ -3,7 +3,9 @@ package com.example.carlauncher.data.location
 import android.location.Location
 import com.example.carlauncher.data.model.VehicleDisplayLocation
 import javax.inject.Inject
+import javax.inject.Singleton
 
+@Singleton
 class LocationProcessor @Inject constructor() {
 
     private val kalmanFilter = KalmanFilter()
@@ -28,7 +30,7 @@ class LocationProcessor @Inject constructor() {
             speedKmh = smoothedSpeed,
             bearingDeg = location.bearing,
             accuracyM = location.accuracy,
-            timestamp = System.currentTimeMillis()
+            timestamp = location.time
         )
     }
 
