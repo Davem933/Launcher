@@ -12,7 +12,8 @@ class LocationProcessor @Inject constructor() {
     private val speedBuffer = ArrayDeque<Float>(3)
 
     fun process(location: Location): VehicleDisplayLocation {
-        val (smoothLat, smoothLng) = kalmanFilter.process(
+        // Returns the same pre-allocated DoubleArray each call — no Pair boxing
+        val smoothed = kalmanFilter.process(
             lat = location.latitude,
             lng = location.longitude,
             accuracy = location.accuracy,
@@ -25,8 +26,8 @@ class LocationProcessor @Inject constructor() {
         val smoothedSpeed = speedBuffer.average().toFloat()
 
         return VehicleDisplayLocation(
-            lat = smoothLat,
-            lng = smoothLng,
+            lat = smoothed[0],
+            lng = smoothed[1],
             speedKmh = smoothedSpeed,
             bearingDeg = location.bearing,
             accuracyM = location.accuracy,

@@ -25,25 +25,54 @@ class LocationRepository @Inject constructor(
     // Dedicated background thread for location callbacks — keeps Kalman filter off Main thread
     private val locationThread = HandlerThread("location-thread").also { it.start() }
 
-    private val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 500L)
-        .setMinUpdateDistanceMeters(0f)
-        .build()
-
     private val locationCallback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
             result.lastLocation?.let { location ->
-                // Runs on locationThread (background) — safe to do Kalman processing here
-                _vehicleLocation.value = processor.process(location)
+                val vehicleLocation = processor.process(location)
+                _vehicleLocation.value = vehicleLocation
+                // Self-contained adaptive interval: no ViewModel changes needed
+                adjustIntervalIfNeeded(vehicleLocation.speedKmh)
             }
         }
     }
 
     private var isTracking = false
 
+    // Adaptive GPS interval — reduces battery drain when parked
+    private enum class IntervalMode { DRIVING, PARKED }
+    private var currentMode = IntervalMode.DRIVING
+
+    private fun buildRequest(mode: IntervalMode): LocationRequest {
+        val (interval, priority) = when (mode) {
+            IntervalMode.DRIVING -> 500L to Priority.PRIORITY_HIGH_ACCURACY
+            IntervalMode.PARKED  -> 5000L to Priority.PRIORITY_BALANCED_POWER_ACCURACY
+        }
+        return LocationRequest.Builder(priority, interval)
+            .setMinUpdateDistanceMeters(0f)
+            .build()
+    }
+
+    private fun adjustIntervalIfNeeded(speedKmh: Float) {
+        val targetMode = if (speedKmh > 5f) IntervalMode.DRIVING else IntervalMode.PARKED
+        if (targetMode == currentMode) return
+        currentMode = targetMode
+        try {
+            fusedClient.removeLocationUpdates(locationCallback)
+            fusedClient.requestLocationUpdates(
+                buildRequest(targetMode), locationCallback, locationThread.looper
+            )
+            Log.d(TAG, "GPS interval → $targetMode (speed=${speedKmh.toInt()} km/h)")
+        } catch (e: SecurityException) {
+            Log.w(TAG, "adjustInterval: $e")
+        }
+    }
+
     fun startTracking() {
         if (isTracking) return
         try {
-            fusedClient.requestLocationUpdates(locationRequest, locationCallback, locationThread.looper)
+            fusedClient.requestLocationUpdates(
+                buildRequest(IntervalMode.DRIVING), locationCallback, locationThread.looper
+            )
             isTracking = true
         } catch (e: SecurityException) {
             Log.w(TAG, "Location permission not granted: ${e.message}")
@@ -54,6 +83,7 @@ class LocationRepository @Inject constructor(
         if (!isTracking) return
         fusedClient.removeLocationUpdates(locationCallback)
         processor.reset()
+        currentMode = IntervalMode.DRIVING
         isTracking = false
     }
 

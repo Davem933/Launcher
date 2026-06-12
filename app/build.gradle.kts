@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -6,16 +8,25 @@ plugins {
     kotlin("kapt")
 }
 
+// API key lives in local.properties (not committed), never in source code
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+val mapyczApiKey: String = localProps.getProperty("MAPYCZ_API_KEY", "MAPY_API_KEY_HERE")
+
 android {
     namespace = "com.example.carlauncher"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.example.carlauncher"
         minSdk = 31
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+
+        buildConfigField("String", "MAPYCZ_API_KEY", "\"$mapyczApiKey\"")
     }
 
     buildTypes {
@@ -39,6 +50,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -65,6 +77,15 @@ dependencies {
 
     implementation(libs.coroutines.android)
 
+    // Material icons (SkipNext, SkipPrevious, MusicNote etc. — not in core icons)
+    implementation("androidx.compose.material:material-icons-extended")
+
+    // DataStore — dock slot persistence
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
+
     // MapLibre
-    implementation("org.maplibre.gl:android-sdk:11.0.1")
+    implementation("org.maplibre.gl:android-sdk:11.5.2")
+
+    // PMTiles HTTP server (serves PMTiles file to MapLibre via localhost)
+    implementation("org.nanohttpd:nanohttpd:2.3.1")
 }

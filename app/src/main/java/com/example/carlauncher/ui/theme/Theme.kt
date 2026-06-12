@@ -8,7 +8,7 @@ import androidx.compose.ui.graphics.Color
 private val CarColorScheme = darkColorScheme(
     background = Color(0xFF0D0D0F),
     surface = Color(0xFF1A1A1F),
-    primary = Color(0xFF00C853),
+    primary = Color(0xFF22C55E),
     onPrimary = Color(0xFF000000),
     onBackground = Color(0xFFF0F0F5),
     onSurface = Color(0xFFF0F0F5),

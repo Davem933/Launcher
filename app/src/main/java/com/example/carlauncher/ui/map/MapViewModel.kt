@@ -14,5 +14,4 @@ class MapViewModel @Inject constructor(
 
     val vehicleLocation: StateFlow<VehicleDisplayLocation?> = repository.vehicleLocation
 
-    val mapStyle: String = "asset://style/map_style_dark.json"
 }
