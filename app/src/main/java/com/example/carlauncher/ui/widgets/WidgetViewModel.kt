@@ -18,7 +18,6 @@ import javax.inject.Inject
 
 private val Context.widgetDataStore by preferencesDataStore(name = "widgets")
 private val WIDGET_IDS_KEY = stringPreferencesKey("widget_ids")
-private val WIDGET_HEIGHTS_KEY = stringPreferencesKey("widget_heights")
 private const val HOST_ID = 1337
 
 @HiltViewModel
@@ -32,10 +31,6 @@ class WidgetViewModel @Inject constructor(
     private val _widgetIds = MutableStateFlow<List<Int>>(emptyList())
     val widgetIds: StateFlow<List<Int>> = _widgetIds.asStateFlow()
 
-    // widgetId → height in dp
-    private val _widgetHeights = MutableStateFlow<Map<Int, Int>>(emptyMap())
-    val widgetHeights: StateFlow<Map<Int, Int>> = _widgetHeights.asStateFlow()
-
     init {
         appWidgetHost.startListening()
         viewModelScope.launch {
@@ -43,15 +38,6 @@ class WidgetViewModel @Inject constructor(
                 val raw = prefs[WIDGET_IDS_KEY] ?: ""
                 _widgetIds.value = if (raw.isEmpty()) emptyList()
                 else raw.split(",").mapNotNull { it.toIntOrNull() }
-
-                val heightsRaw = prefs[WIDGET_HEIGHTS_KEY] ?: ""
-                _widgetHeights.value = if (heightsRaw.isEmpty()) emptyMap()
-                else heightsRaw.split(",").mapNotNull { entry ->
-                    val parts = entry.split(":")
-                    if (parts.size == 2) parts[0].toIntOrNull()?.let { id ->
-                        parts[1].toIntOrNull()?.let { h -> id to h }
-                    } else null
-                }.toMap()
             }
         }
     }
@@ -61,29 +47,18 @@ class WidgetViewModel @Inject constructor(
     fun addWidget(appWidgetId: Int) {
         val current = _widgetIds.value.toMutableList()
         if (!current.contains(appWidgetId)) current.add(appWidgetId)
-        viewModelScope.launch { persistAll(current, _widgetHeights.value) }
+        viewModelScope.launch { persist(current) }
     }
 
     fun removeWidget(appWidgetId: Int) {
         appWidgetHost.deleteAppWidgetId(appWidgetId)
         val current = _widgetIds.value.toMutableList()
         current.remove(appWidgetId)
-        val heights = _widgetHeights.value.toMutableMap().also { it.remove(appWidgetId) }
-        viewModelScope.launch { persistAll(current, heights) }
+        viewModelScope.launch { persist(current) }
     }
 
-    fun setWidgetHeight(appWidgetId: Int, heightDp: Int) {
-        val clamped = heightDp.coerceIn(80, 480)
-        val heights = _widgetHeights.value.toMutableMap().also { it[appWidgetId] = clamped }
-        _widgetHeights.value = heights
-        viewModelScope.launch { persistAll(_widgetIds.value, heights) }
-    }
-
-    private suspend fun persistAll(ids: List<Int>, heights: Map<Int, Int>) {
-        context.widgetDataStore.edit { prefs ->
-            prefs[WIDGET_IDS_KEY] = ids.joinToString(",")
-            prefs[WIDGET_HEIGHTS_KEY] = heights.entries.joinToString(",") { "${it.key}:${it.value}" }
-        }
+    private suspend fun persist(ids: List<Int>) {
+        context.widgetDataStore.edit { it[WIDGET_IDS_KEY] = ids.joinToString(",") }
     }
 
     override fun onCleared() {
