@@ -1,5 +1,10 @@
 package com.example.carlauncher.ui.launcher
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,18 +15,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.carlauncher.BuildConfig
+import com.example.carlauncher.debug.DebugPanel
+import com.example.carlauncher.debug.GpsDebugOverlay
 import com.example.carlauncher.ui.dock.DockBar
 import com.example.carlauncher.ui.dock.DockViewModel
 import com.example.carlauncher.ui.map.MapWidget
@@ -36,6 +41,9 @@ fun LauncherScreen(
 ) {
     val location       by viewModel.vehicleLocation.collectAsStateWithLifecycle()
     val showAppDrawer  by dockViewModel.showAppDrawer.collectAsStateWithLifecycle()
+    val allApps        by dockViewModel.allApps.collectAsStateWithLifecycle()
+    val appIcons       by dockViewModel.appIcons.collectAsStateWithLifecycle()
+    var debugOverlayVisible by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize()) {
 
@@ -86,43 +94,15 @@ fun LauncherScreen(
                             .fillMaxWidth()
                             .weight(1f)
                     )
+                    SystemControlsWidget(
+                        modifier = Modifier.fillMaxWidth()
+                    )
                     QuickDestWidget(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
             }
 
-            // GPS debug overlay (top-left over the map) — debug builds only
-            if (BuildConfig.DEBUG) location?.let {
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(24.dp)
-                        .background(Color(0xCC000000), RoundedCornerShape(8.dp))
-                        .padding(8.dp)
-                ) {
-                    Text(
-                        "GPS: ${"%.5f".format(it.lat)}, ${"%.5f".format(it.lng)}",
-                        color = CarColors.Go,
-                        fontSize = 12.sp
-                    )
-                    Text(
-                        "Speed: ${"%.1f".format(it.speedKmh)} km/h",
-                        color = CarColors.Text,
-                        fontSize = 12.sp
-                    )
-                    Text(
-                        "Bearing: ${"%.0f".format(it.bearingDeg)}°",
-                        color = CarColors.Text,
-                        fontSize = 12.sp
-                    )
-                    Text(
-                        "Accuracy: ${"%.0f".format(it.accuracyM)}m",
-                        color = CarColors.Text3,
-                        fontSize = 12.sp
-                    )
-                }
-            }
         }
 
         // ── DockBar — fixed 88dp, padded off the screen edge ─────────────────
@@ -135,9 +115,25 @@ fun LauncherScreen(
         )
     }
 
+    // ── Debug tools — GPS overlay + control panel, DEBUG builds only ──────────
+    if (BuildConfig.DEBUG) {
+        GpsDebugOverlay(
+            location  = location,
+            isVisible = debugOverlayVisible,
+            onToggle  = { debugOverlayVisible = !debugOverlayVisible }
+        )
+        DebugPanel(viewModel = viewModel)
+    }
+
     // ── AppDrawer overlay — fullscreen, shown when Menu tile is tapped ────────
-    if (showAppDrawer) {
+    AnimatedVisibility(
+        visible = showAppDrawer,
+        enter = fadeIn(tween(200)) + slideInVertically(tween(200)) { it / 8 },
+        exit  = fadeOut(tween(150))
+    ) {
         AppDrawer(
+            apps = allApps,
+            icons = appIcons,
             onAppClick = { packageName ->
                 dockViewModel.closeAppDrawer()
                 dockViewModel.launchApp(packageName)

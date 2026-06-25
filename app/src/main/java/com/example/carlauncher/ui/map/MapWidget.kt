@@ -3,7 +3,10 @@ package com.example.carlauncher.ui.map
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.RectF
 import android.util.Log
+import com.example.carlauncher.data.model.Poi
+import com.example.carlauncher.data.model.PoiType
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -34,6 +37,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
@@ -42,13 +46,13 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.expressions.Expression
 import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonSource
@@ -59,15 +63,14 @@ private const val MARKER_IMAGE_ID = "vehicle-marker"
 private const val VEHICLE_SOURCE_ID = "vehicle-source"
 private const val VEHICLE_LAYER_ID = "vehicle-layer"
 
+private const val POI_SOURCE_ID = "poi-source"
+private const val POI_LAYER_ID = "poi-layer"
+
 private class MapState {
     var map: MapLibreMap? = null
     var source: GeoJsonSource? = null
-    var layer: SymbolLayer? = null
+    var poiSource: GeoJsonSource? = null
     var destroyed = false
-    // Threshold tracking — skip marker/camera update when position hasn't changed enough
-    var lastLat: Double? = null
-    var lastLng: Double? = null
-    var lastBearing: Float = 0f
 }
 
 @Composable
@@ -88,36 +91,70 @@ fun MapWidget(
     }
     val mapState = remember { MapState() }
     var mapAsyncReady by remember { mutableStateOf(false) }
+    var isFollowing by remember { mutableStateOf(true) }
 
     // Load Mapy.cz raster style as soon as MapLibre is ready
     LaunchedEffect(mapAsyncReady) {
         if (!mapAsyncReady) return@LaunchedEffect
         val map = mapState.map ?: return@LaunchedEffect
 
-        val styleJson = buildMapyczStyleJson(TileConfig.MAPYCZ_BASIC)
-        Log.d("MapWidget", "Loading Mapy.cz style")
-        map.setStyle(Style.Builder().fromJson(styleJson)) { style ->
+        val styleBuilder = when (viewModel.tileSource) {
+            TileSource.MAPYCZ  -> Style.Builder().fromJson(buildMapyczStyleJson(TileConfig.MAPYCZ_BASIC))
+            TileSource.DEMO    -> Style.Builder().fromUri(TileConfig.DEMO)
+            // TODO: Přepnout na PMTILES po ověření POI vrstev na zařízení.
+            TileSource.PMTILES -> Style.Builder().fromJson(buildMapyczStyleJson(TileConfig.MAPYCZ_BASIC))
+        }
+        Log.d("MapWidget", "Loading style: ${viewModel.tileSource}")
+        map.setStyle(styleBuilder) { style ->
             Log.d("MapWidget", "Style loaded OK, layers=${style.layers.size}")
+
+            // POI layer — below vehicle marker
+            PoiType.entries.forEach { type ->
+                style.addImage("poi-${type.name.lowercase()}", createPoiIcon(type))
+            }
+            val poiSource = GeoJsonSource(POI_SOURCE_ID)
+            style.addSource(poiSource)
+            mapState.poiSource = poiSource
+            style.addLayer(
+                SymbolLayer(POI_LAYER_ID, POI_SOURCE_ID).withProperties(
+                    PropertyFactory.iconImage(Expression.get("icon")),
+                    PropertyFactory.iconAllowOverlap(true),
+                    PropertyFactory.iconIgnorePlacement(true),
+                    PropertyFactory.iconSize(0.8f)
+                )
+            )
+            val pendingPois = viewModel.nearbyPois.value
+            if (pendingPois.isNotEmpty()) poiSource.setGeoJson(poisToGeoJson(pendingPois))
+
+            // Vehicle marker layer — on top
             style.addImage(MARKER_IMAGE_ID, createVehicleMarkerBitmap())
 
             val source = GeoJsonSource(VEHICLE_SOURCE_ID)
             style.addSource(source)
             mapState.source = source
 
-            val layer = SymbolLayer(VEHICLE_LAYER_ID, VEHICLE_SOURCE_ID)
-                .withProperties(
-                    PropertyFactory.iconImage(MARKER_IMAGE_ID),
-                    PropertyFactory.iconAllowOverlap(true),
-                    PropertyFactory.iconIgnorePlacement(true),
-                    // Rotate with the map so the wedge tracks vehicle bearing
-                    PropertyFactory.iconRotationAlignment("map")
-                )
-            style.addLayer(layer)
-            mapState.layer = layer
-
-            map.moveCamera(
-                CameraUpdateFactory.newLatLngZoom(LatLng(50.0755, 14.4378), 15.0)
+            // icon-rotate reads "bearing" property from each GeoJSON feature —
+            // rotation updates without touching the layer style (no style re-evaluation)
+            style.addLayer(
+                SymbolLayer(VEHICLE_LAYER_ID, VEHICLE_SOURCE_ID)
+                    .withProperties(
+                        PropertyFactory.iconImage(MARKER_IMAGE_ID),
+                        PropertyFactory.iconSize(0.5f),
+                        PropertyFactory.iconAllowOverlap(true),
+                        PropertyFactory.iconIgnorePlacement(true),
+                        PropertyFactory.iconRotationAlignment("map"),
+                        PropertyFactory.iconRotate(Expression.get("bearing"))
+                    )
             )
+
+            // Race-condition fix: seed source immediately if location already available
+            val currentLoc = location
+            if (currentLoc != null) {
+                source.setGeoJson(featureWithBearing(currentLoc.lat, currentLoc.lng, currentLoc.bearingDeg))
+                map.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(currentLoc.lat, currentLoc.lng), 17.5))
+            } else {
+                map.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(50.0755, 14.4378), 17.5))
+            }
         }
     }
 
@@ -134,12 +171,16 @@ fun MapWidget(
                     }
                     getMapAsync { map ->
                         mapState.map = map
-                        map.uiSettings.isScrollGesturesEnabled = false
-                        map.uiSettings.isZoomGesturesEnabled = false
+                        map.uiSettings.isScrollGesturesEnabled = true
+                        map.uiSettings.isZoomGesturesEnabled = true
                         map.uiSettings.isRotateGesturesEnabled = false
                         map.uiSettings.isTiltGesturesEnabled = false
                         map.uiSettings.isLogoEnabled = false
                         map.uiSettings.isAttributionEnabled = false
+                        // reason == 1 → REASON_GESTURE (user touch)
+                        map.addOnCameraMoveStartedListener { reason ->
+                            if (reason == 1) isFollowing = false
+                        }
                         mapAsyncReady = true
                     }
                 }
@@ -181,35 +222,28 @@ fun MapWidget(
     }
 
     LaunchedEffect(location) {
-        val loc = location ?: return@LaunchedEffect
-        val map = mapState.map ?: return@LaunchedEffect
+        val loc    = location ?: return@LaunchedEffect
         val source = mapState.source ?: return@LaunchedEffect
 
-        // Skip update if position hasn't moved enough — avoids flooding GPU with animateCamera
-        val prevLat = mapState.lastLat
-        val shouldUpdate = prevLat == null ||
-            haversineMeters(prevLat, mapState.lastLng!!, loc.lat, loc.lng) > 5.0 ||
-            angleDiff(mapState.lastBearing, loc.bearingDeg) > 5.0
+        source.setGeoJson(featureWithBearing(loc.lat, loc.lng, loc.bearingDeg))
 
-        if (!shouldUpdate) return@LaunchedEffect
+        if (isFollowing) {
+            mapState.map?.animateCamera(CameraUpdateFactory.newLatLng(LatLng(loc.lat, loc.lng)), 500)
+        }
+    }
 
-        source.setGeoJson(Feature.fromGeometry(Point.fromLngLat(loc.lng, loc.lat)))
-        mapState.layer?.setProperties(PropertyFactory.iconRotate(loc.bearingDeg))
+    // Resume following 10s after user last touched the map
+    LaunchedEffect(isFollowing) {
+        if (!isFollowing) {
+            delay(10_000)
+            isFollowing = true
+        }
+    }
 
-        map.animateCamera(
-            CameraUpdateFactory.newCameraPosition(
-                CameraPosition.Builder()
-                    .target(LatLng(loc.lat, loc.lng))
-                    .zoom(map.cameraPosition.zoom)
-                    .bearing(loc.bearingDeg.toDouble())
-                    .build()
-            ),
-            300
-        )
-
-        mapState.lastLat = loc.lat
-        mapState.lastLng = loc.lng
-        mapState.lastBearing = loc.bearingDeg
+    LaunchedEffect("poi") {
+        viewModel.nearbyPois.collect { pois ->
+            mapState.poiSource?.setGeoJson(poisToGeoJson(pois))
+        }
     }
 
     DisposableEffect(lifecycleOwner) {
@@ -237,17 +271,51 @@ fun MapWidget(
     }
 }
 
-private fun haversineMeters(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Double {
-    val dLat = Math.toRadians(lat2 - lat1)
-    val dLng = Math.toRadians(lng2 - lng1)
-    val a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
-            Math.sin(dLng / 2) * Math.sin(dLng / 2)
-    return 6_371_000.0 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1.0 - a))
+private fun poisToGeoJson(pois: List<Poi>): String {
+    val features = pois.joinToString(",") { poi ->
+        val name = (poi.name ?: "").replace("\\", "\\\\").replace("\"", "\\\"")
+        """{"type":"Feature","geometry":{"type":"Point","coordinates":[${poi.lng},${poi.lat}]},"properties":{"icon":"poi-${poi.type.name.lowercase()}","name":"$name"}}"""
+    }
+    return """{"type":"FeatureCollection","features":[$features]}"""
 }
 
-private fun angleDiff(a: Float, b: Float): Float =
-    kotlin.math.abs(((b - a + 180f) % 360f) - 180f)
+private fun createPoiIcon(type: PoiType): Bitmap {
+    val size = 64
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    val c = size / 2f
+    val r = c - 4f
+    val bgColor = when (type) {
+        PoiType.FUEL       -> android.graphics.Color.parseColor("#22C55E")
+        PoiType.PARKING    -> android.graphics.Color.parseColor("#3B82F6")
+        PoiType.RESTAURANT -> android.graphics.Color.parseColor("#F97316")
+        PoiType.HOSPITAL   -> android.graphics.Color.parseColor("#EF4444")
+    }
+    val label = when (type) {
+        PoiType.FUEL       -> "⛽"
+        PoiType.PARKING    -> "P"
+        PoiType.RESTAURANT -> "☕"
+        PoiType.HOSPITAL   -> "+"
+    }
+    val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = bgColor; style = Paint.Style.FILL }
+    if (type == PoiType.PARKING) canvas.drawRoundRect(RectF(4f, 4f, size - 4f, size - 4f), 10f, 10f, bgPaint)
+    else canvas.drawCircle(c, c, r, bgPaint)
+    val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE
+        textSize = if (type == PoiType.PARKING || type == PoiType.HOSPITAL) 30f else 22f
+        textAlign = Paint.Align.CENTER
+        isFakeBoldText = true
+    }
+    canvas.drawText(label, c, c - (textPaint.descent() + textPaint.ascent()) / 2f, textPaint)
+    return bitmap
+}
+
+// Encode bearing as GeoJSON feature property so icon-rotate is data-driven.
+// Updating only the source data never triggers a style re-evaluation → no flicker.
+private fun featureWithBearing(lat: Double, lng: Double, bearing: Float): Feature =
+    Feature.fromGeometry(Point.fromLngLat(lng, lat)).also {
+        it.addNumberProperty("bearing", bearing)
+    }
 
 private fun createVehicleMarkerBitmap(): Bitmap {
     // 128px ≈ 46dp at ~2.75x density — big enough to spot at a glance while driving
