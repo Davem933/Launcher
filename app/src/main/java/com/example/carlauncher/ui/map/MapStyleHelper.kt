@@ -12,11 +12,18 @@ fun buildMapyczStyleJson(tileUrl: String): String {
           "attribution": "© Seznam.cz a.s."
         }
       },
-      "layers": [{
-        "id": "mapy-cz-layer",
-        "type": "raster",
-        "source": "mapy-cz"
-      }]
+      "layers": [
+        {
+          "id": "background",
+          "type": "background",
+          "paint": { "background-color": "#1a1c24" }
+        },
+        {
+          "id": "mapy-cz-layer",
+          "type": "raster",
+          "source": "mapy-cz"
+        }
+      ]
     }
     """.trimIndent()
 }
