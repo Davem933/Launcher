@@ -2,6 +2,7 @@ package com.example.carlauncher.ui.widgets
 
 import android.appwidget.AppWidgetHostView
 import android.os.Bundle
+import android.view.ViewGroup
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -100,6 +101,7 @@ fun WidgetScreen(
                         editMode = editMode,
                         onAddWidget = onAddWidget,
                         onEnterEditMode = { editMode = true },
+                        onExitEditMode = { editMode = false },
                         onRemove = { editMode = false },
                         modifier = Modifier.weight(1f).fillMaxWidth()
                     )
@@ -108,6 +110,7 @@ fun WidgetScreen(
                         editMode = editMode,
                         onAddWidget = onAddWidget,
                         onEnterEditMode = { editMode = true },
+                        onExitEditMode = { editMode = false },
                         onRemove = { editMode = false },
                         modifier = Modifier.weight(1f).fillMaxWidth()
                     )
@@ -121,6 +124,7 @@ fun WidgetScreen(
                         editMode = editMode,
                         onAddWidget = onAddWidget,
                         onEnterEditMode = { editMode = true },
+                        onExitEditMode = { editMode = false },
                         onRemove = { editMode = false },
                         modifier = Modifier.weight(1f).fillMaxWidth()
                     )
@@ -129,6 +133,7 @@ fun WidgetScreen(
                         editMode = editMode,
                         onAddWidget = onAddWidget,
                         onEnterEditMode = { editMode = true },
+                        onExitEditMode = { editMode = false },
                         onRemove = { editMode = false },
                         modifier = Modifier.weight(1f).fillMaxWidth()
                     )
@@ -154,6 +159,7 @@ private fun WidgetSlot(
     editMode: Boolean,
     onAddWidget: () -> Unit,
     onEnterEditMode: () -> Unit,
+    onExitEditMode: () -> Unit,
     onRemove: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -170,6 +176,7 @@ private fun WidgetSlot(
                 viewModel = viewModel,
                 editMode = editMode,
                 onEnterEditMode = onEnterEditMode,
+                onExitEditMode = onExitEditMode,
                 onRemove = {
                     viewModel.removeWidget(widgetId)
                     onRemove()
@@ -187,6 +194,7 @@ private fun WidgetCard(
     viewModel: WidgetViewModel,
     editMode: Boolean,
     onEnterEditMode: () -> Unit,
+    onExitEditMode: () -> Unit,
     onRemove: () -> Unit
 ) {
     val context = LocalContext.current
@@ -198,17 +206,23 @@ private fun WidgetCard(
         val view = viewModel.appWidgetHost.createView(context, widgetId, info) as AppWidgetHostView
         view.setAppWidget(widgetId, info)
         view.setPadding(0, 0, 0, 0)
+        view.layoutParams = ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.MATCH_PARENT
+        )
         view
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .onSizeChanged { size ->
-                if (size != cardSize && size != IntSize.Zero) {
-                    cardSize = size
-                    val wDp = with(density) { size.width.toDp().value.toInt() }
-                    val hDp = with(density) { size.height.toDp().value.toInt() }
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Widget view — behind the overlay
+        AndroidView(
+            factory = { hostView },
+            update = { view ->
+                // Push actual card dimensions as widget options so responsive widgets
+                // (e.g. Google Calendar) re-layout for the correct size
+                if (cardSize != IntSize.Zero) {
+                    val wDp = with(density) { cardSize.width.toDp().value.toInt() }
+                    val hDp = with(density) { cardSize.height.toDp().value.toInt() }
                     val opts = Bundle().apply {
                         putInt("appWidgetMinWidth", wDp)
                         putInt("appWidgetMaxWidth", wDp)
@@ -217,12 +231,10 @@ private fun WidgetCard(
                     }
                     viewModel.appWidgetManager.updateAppWidgetOptions(widgetId, opts)
                 }
-            }
-    ) {
-        // Widget view — behind the overlay
-        AndroidView(
-            factory = { hostView },
-            modifier = Modifier.fillMaxSize()
+            },
+            modifier = Modifier
+                .fillMaxSize()
+                .onSizeChanged { if (it != IntSize.Zero) cardSize = it }
         )
 
         // Transparent overlay on top of the native view — intercepts long press.
@@ -238,12 +250,15 @@ private fun WidgetCard(
                 }
         )
 
-        // Edit mode: dark scrim + large delete button
+        // Edit mode: dark scrim — tap scrim = exit, tap koš = smazat
         if (editMode) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0x88000000)),
+                    .background(Color(0x88000000))
+                    .pointerInput(Unit) {
+                        detectTapGestures(onTap = { onExitEditMode() })
+                    },
                 contentAlignment = Alignment.Center
             ) {
                 Box(
