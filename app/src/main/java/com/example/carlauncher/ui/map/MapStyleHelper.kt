@@ -12,10 +12,10 @@ fun buildMapyczStyleJson(tileUrl: String, isDark: Boolean = true): String {
 }
 
 // Minimal dark vector style for offline PMTiles (OpenMapTiles schema).
-// Layer IDs match the vector_layers served by PmtilesHttpServer on port 8888.
+// MapLibre 11.8.0+ resolves pmtiles:// natively — no HTTP server needed.
 fun buildPmtilesStyleJson(): String = buildString {
     append("""{"version":8,"sources":{"pmtiles":{"type":"vector",""")
-    append(""""tiles":["http://127.0.0.1:8888/tile/{z}/{x}/{y}"],"minzoom":0,"maxzoom":14}},""")
+    append(""""url":"${TileConfig.PMTILES}"}},""")
     append(""""layers":[""")
     append("""{"id":"background","type":"background","paint":{"background-color":"#1a1c24"}},""")
     append("""{"id":"water","type":"fill","source":"pmtiles","source-layer":"water","paint":{"fill-color":"#1a3a5c"}},""")
