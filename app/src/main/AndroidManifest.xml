@@ -10,6 +10,8 @@
     <!-- Read PMTiles file from shared external storage (API 31-32) -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
+    <!-- Full file access for PMTiles on API 33+ (scoped storage exemption) -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
 
     <application
         android:name=".CarLauncherApp"

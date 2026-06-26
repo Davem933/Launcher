@@ -3,8 +3,11 @@ package com.example.carlauncher
 import android.Manifest
 import android.appwidget.AppWidgetManager
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.Settings
 import android.util.Log
 import android.view.WindowManager
 import android.widget.Toast
@@ -99,6 +102,15 @@ class MainActivity : ComponentActivity() {
                 Manifest.permission.ACCESS_COARSE_LOCATION
             )
         )
+
+        // MANAGE_EXTERNAL_STORAGE needed to read PMTiles file from /storage/emulated/0/CarLauncher/
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
+            startActivity(
+                Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+                    data = Uri.parse("package:$packageName")
+                }
+            )
+        }
 
         setContent {
             val themeVm = hiltViewModel<ThemeViewModel>()
