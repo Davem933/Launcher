@@ -265,8 +265,12 @@ fun MapWidget(
         if (state.isAtLeast(Lifecycle.State.RESUMED)) mapView.onResume()
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
-            // Composable may leave composition without a lifecycle ON_DESTROY
-            if (!mapState.destroyed) { mapState.destroyed = true; mapView.onDestroy() }
+            // Only destroy MapView when the Activity is actually finishing, not on pager swipe.
+            // HorizontalPager removes composables from composition when swiped away — calling
+            // onDestroy() here would kill the MapView permanently; it cannot be restarted.
+            if (lifecycleOwner.lifecycle.currentState == Lifecycle.State.DESTROYED) {
+                if (!mapState.destroyed) { mapState.destroyed = true; mapView.onDestroy() }
+            }
         }
     }
 }
