@@ -3,7 +3,6 @@ package com.example.carlauncher.ui.widgets
 import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.content.Context
-import android.content.Intent
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -54,21 +53,8 @@ class WidgetViewModel @Inject constructor(
     fun allocateWidgetId(): Int = appWidgetHost.allocateAppWidgetId()
 
     fun addWidget(appWidgetId: Int) {
-        appWidgetHost.startListening()
         val current = _widgetIds.value.toMutableList()
-        if (!current.contains(appWidgetId)) {
-            current.add(appWidgetId)
-            // Ask the provider to push fresh RemoteViews immediately.
-            // Without this the host may miss the initial update and show blank.
-            val info = appWidgetManager.getAppWidgetInfo(appWidgetId)
-            info?.provider?.let { provider ->
-                val intent = Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE).apply {
-                    component = provider
-                    putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, intArrayOf(appWidgetId))
-                }
-                context.sendBroadcast(intent)
-            }
-        }
+        if (!current.contains(appWidgetId)) current.add(appWidgetId)
         viewModelScope.launch { persist(current) }
     }
 
