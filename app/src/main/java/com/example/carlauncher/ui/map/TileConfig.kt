@@ -16,5 +16,5 @@ object TileConfig {
     val MAPYCZ_DARK    = "https://api.mapy.cz/v1/maptiles/dark/256/{z}/{x}/{y}?apikey=$MAPYCZ_API_KEY"
 
     // PMTiles — offline mapa na tabletu, nativní podpora od MapLibre 11.8.0
-    const val PMTILES = "pmtiles://file:///storage/emulated/0/CarLauncher/czech.pmtiles"
+    const val PMTILES = "pmtiles:///storage/emulated/0/CarLauncher/czech.pmtiles"
 }

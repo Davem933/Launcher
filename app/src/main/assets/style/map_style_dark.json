@@ -6,7 +6,9 @@
   "sources": {
     "protomaps": {
       "type": "vector",
-      "url": "pmtiles://file:///storage/emulated/0/CarLauncher/czech.pmtiles",
+      "tiles": ["http://127.0.0.1:8888/tile/{z}/{x}/{y}"],
+      "minzoom": 0,
+      "maxzoom": 14,
       "attribution": "© OpenStreetMap"
     }
   },
