@@ -2,9 +2,7 @@ package com.example.carlauncher.ui.widgets
 
 import android.appwidget.AppWidgetHostView
 import android.os.Bundle
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -77,59 +75,64 @@ fun WidgetScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(CarColors.Bg)
-            // tap outside any widget cancels edit mode
-            .pointerInput(editMode) {
-                if (editMode) detectTapGestures(onTap = { editMode = false })
-            }
     ) {
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .padding(horizontal = 8.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                // Tap on background cancels edit mode
+                .pointerInput(editMode) {
+                    if (editMode) detectTapGestures(onTap = { editMode = false })
+                }
         ) {
-            Column(
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                WidgetSlot(
-                    slotIndex = 0, widgetIds = widgetIds, viewModel = viewModel,
-                    editMode = editMode,
-                    onAddWidget = onAddWidget,
-                    onLongPress = { editMode = true },
-                    onRemove = { editMode = false },
-                    modifier = Modifier.weight(1f).fillMaxWidth()
-                )
-                WidgetSlot(
-                    slotIndex = 1, widgetIds = widgetIds, viewModel = viewModel,
-                    editMode = editMode,
-                    onAddWidget = onAddWidget,
-                    onLongPress = { editMode = true },
-                    onRemove = { editMode = false },
-                    modifier = Modifier.weight(1f).fillMaxWidth()
-                )
-            }
-            Column(
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                WidgetSlot(
-                    slotIndex = 2, widgetIds = widgetIds, viewModel = viewModel,
-                    editMode = editMode,
-                    onAddWidget = onAddWidget,
-                    onLongPress = { editMode = true },
-                    onRemove = { editMode = false },
-                    modifier = Modifier.weight(1f).fillMaxWidth()
-                )
-                WidgetSlot(
-                    slotIndex = 3, widgetIds = widgetIds, viewModel = viewModel,
-                    editMode = editMode,
-                    onAddWidget = onAddWidget,
-                    onLongPress = { editMode = true },
-                    onRemove = { editMode = false },
-                    modifier = Modifier.weight(1f).fillMaxWidth()
-                )
+                Column(
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    WidgetSlot(
+                        slotIndex = 0, widgetIds = widgetIds, viewModel = viewModel,
+                        editMode = editMode,
+                        onAddWidget = onAddWidget,
+                        onEnterEditMode = { editMode = true },
+                        onRemove = { editMode = false },
+                        modifier = Modifier.weight(1f).fillMaxWidth()
+                    )
+                    WidgetSlot(
+                        slotIndex = 1, widgetIds = widgetIds, viewModel = viewModel,
+                        editMode = editMode,
+                        onAddWidget = onAddWidget,
+                        onEnterEditMode = { editMode = true },
+                        onRemove = { editMode = false },
+                        modifier = Modifier.weight(1f).fillMaxWidth()
+                    )
+                }
+                Column(
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    WidgetSlot(
+                        slotIndex = 2, widgetIds = widgetIds, viewModel = viewModel,
+                        editMode = editMode,
+                        onAddWidget = onAddWidget,
+                        onEnterEditMode = { editMode = true },
+                        onRemove = { editMode = false },
+                        modifier = Modifier.weight(1f).fillMaxWidth()
+                    )
+                    WidgetSlot(
+                        slotIndex = 3, widgetIds = widgetIds, viewModel = viewModel,
+                        editMode = editMode,
+                        onAddWidget = onAddWidget,
+                        onEnterEditMode = { editMode = true },
+                        onRemove = { editMode = false },
+                        modifier = Modifier.weight(1f).fillMaxWidth()
+                    )
+                }
             }
         }
 
@@ -150,7 +153,7 @@ private fun WidgetSlot(
     viewModel: WidgetViewModel,
     editMode: Boolean,
     onAddWidget: () -> Unit,
-    onLongPress: () -> Unit,
+    onEnterEditMode: () -> Unit,
     onRemove: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -166,7 +169,7 @@ private fun WidgetSlot(
                 widgetId = widgetId,
                 viewModel = viewModel,
                 editMode = editMode,
-                onLongPress = onLongPress,
+                onEnterEditMode = onEnterEditMode,
                 onRemove = {
                     viewModel.removeWidget(widgetId)
                     onRemove()
@@ -178,13 +181,12 @@ private fun WidgetSlot(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun WidgetCard(
     widgetId: Int,
     viewModel: WidgetViewModel,
     editMode: Boolean,
-    onLongPress: () -> Unit,
+    onEnterEditMode: () -> Unit,
     onRemove: () -> Unit
 ) {
     val context = LocalContext.current
@@ -202,31 +204,41 @@ private fun WidgetCard(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .onSizeChanged { cardSize = it }
-            .combinedClickable(
-                onClick = {},
-                onLongClick = onLongPress
-            )
+            .onSizeChanged { size ->
+                if (size != cardSize && size != IntSize.Zero) {
+                    cardSize = size
+                    val wDp = with(density) { size.width.toDp().value.toInt() }
+                    val hDp = with(density) { size.height.toDp().value.toInt() }
+                    val opts = Bundle().apply {
+                        putInt("appWidgetMinWidth", wDp)
+                        putInt("appWidgetMaxWidth", wDp)
+                        putInt("appWidgetMinHeight", hDp)
+                        putInt("appWidgetMaxHeight", hDp)
+                    }
+                    viewModel.appWidgetManager.updateAppWidgetOptions(widgetId, opts)
+                }
+            }
     ) {
+        // Widget view — behind the overlay
         AndroidView(
             factory = { hostView },
-            update = { view ->
-                if (cardSize != IntSize.Zero) {
-                    val widthDp = with(density) { cardSize.width.toDp().value.toInt() }
-                    val heightDp = with(density) { cardSize.height.toDp().value.toInt() }
-                    val options = Bundle().apply {
-                        putInt("appWidgetMinWidth", widthDp)
-                        putInt("appWidgetMaxWidth", widthDp)
-                        putInt("appWidgetMinHeight", heightDp)
-                        putInt("appWidgetMaxHeight", heightDp)
-                    }
-                    viewModel.appWidgetManager.updateAppWidgetOptions(widgetId, options)
-                }
-            },
             modifier = Modifier.fillMaxSize()
         )
 
-        // Edit mode overlay
+        // Transparent overlay on top of the native view — intercepts long press.
+        // Must be AFTER AndroidView in the Box so it sits above it in z-order.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(editMode) {
+                    detectTapGestures(
+                        onTap = { /* consume — don't let tap fall through in edit mode */ },
+                        onLongPress = { onEnterEditMode() }
+                    )
+                }
+        )
+
+        // Edit mode: dark scrim + large delete button
         if (editMode) {
             Box(
                 modifier = Modifier
@@ -239,7 +251,9 @@ private fun WidgetCard(
                         .size(72.dp)
                         .clip(CircleShape)
                         .background(Color(0xFFEF4444))
-                        .pointerInput(Unit) { detectTapGestures(onTap = { onRemove() }) },
+                        .pointerInput(Unit) {
+                            detectTapGestures(onTap = { onRemove() })
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
