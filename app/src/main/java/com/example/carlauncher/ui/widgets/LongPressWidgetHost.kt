@@ -29,11 +29,14 @@ class LongPressWidgetHostView(context: Context) : AppWidgetHostView(context) {
         }
     )
 
-    // onInterceptTouchEvent sees every event before any child.
-    // We feed events into GestureDetector but return false so children
-    // still handle their own touches (scroll, click, etc.) normally.
-    override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
+    // dispatchTouchEvent is called for EVERY event regardless of
+    // requestDisallowInterceptTouchEvent — unlike onInterceptTouchEvent,
+    // which stops receiving ACTION_MOVE once a child widget calls
+    // requestDisallowInterceptTouchEvent(true) during its own gesture.
+    // This guarantees the GestureDetector sees ACTION_MOVE and can cancel
+    // the long-press timer when the user starts scrolling.
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
         gestureDetector.onTouchEvent(ev)
-        return false
+        return super.dispatchTouchEvent(ev)
     }
 }
