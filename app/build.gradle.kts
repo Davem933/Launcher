@@ -84,7 +84,7 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
     // MapLibre
-    implementation("org.maplibre.gl:android-sdk:11.5.2")
+    implementation("org.maplibre.gl:android-sdk:11.8.0")
 
     // PMTiles HTTP server (serves PMTiles file to MapLibre via localhost)
     implementation("org.nanohttpd:nanohttpd:2.3.1")

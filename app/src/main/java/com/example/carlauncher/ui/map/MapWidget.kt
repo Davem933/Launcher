@@ -108,8 +108,7 @@ fun MapWidget(
         val styleBuilder = when (viewModel.tileSource) {
             TileSource.MAPYCZ  -> Style.Builder().fromJson(buildMapyczStyleJson(TileConfig.MAPYCZ_BASIC, isDark))
             TileSource.DEMO    -> Style.Builder().fromUri(TileConfig.DEMO)
-            // TODO: Přepnout na PMTILES po ověření POI vrstev na zařízení.
-            TileSource.PMTILES -> Style.Builder().fromJson(buildMapyczStyleJson(TileConfig.MAPYCZ_BASIC, isDark))
+            TileSource.PMTILES -> Style.Builder().fromJson(buildPmtilesStyleJson())
         }
         Log.d("MapWidget", "Loading style: ${viewModel.tileSource}")
         map.setStyle(styleBuilder) { style ->
