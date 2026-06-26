@@ -1,7 +1,10 @@
 package com.example.carlauncher.ui.widgets
 
 import android.appwidget.AppWidgetHostView
+import android.os.Bundle
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,21 +19,25 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -43,8 +50,6 @@ import com.example.carlauncher.ui.dock.DockBar
 import com.example.carlauncher.ui.dock.DockViewModel
 import com.example.carlauncher.ui.theme.CarColors
 
-private const val MAX_SLOTS = 4
-
 @Composable
 fun WidgetScreen(
     onLaunchSplitScreen: (pkg1: String, pkg2: String) -> Unit = { _, _ -> },
@@ -54,6 +59,7 @@ fun WidgetScreen(
 ) {
     val widgetIds by viewModel.widgetIds.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
+    var editMode by remember { mutableStateOf(false) }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -71,8 +77,11 @@ fun WidgetScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(CarColors.Bg)
+            // tap outside any widget cancels edit mode
+            .pointerInput(editMode) {
+                if (editMode) detectTapGestures(onTap = { editMode = false })
+            }
     ) {
-        // 2×2 grid — always shows exactly 4 slots
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -80,56 +89,46 @@ fun WidgetScreen(
                 .padding(horizontal = 8.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Left column: slots 0 and 1
             Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight(),
+                modifier = Modifier.weight(1f).fillMaxHeight(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 WidgetSlot(
-                    slotIndex = 0,
-                    widgetIds = widgetIds,
-                    viewModel = viewModel,
+                    slotIndex = 0, widgetIds = widgetIds, viewModel = viewModel,
+                    editMode = editMode,
                     onAddWidget = onAddWidget,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
+                    onLongPress = { editMode = true },
+                    onRemove = { editMode = false },
+                    modifier = Modifier.weight(1f).fillMaxWidth()
                 )
                 WidgetSlot(
-                    slotIndex = 1,
-                    widgetIds = widgetIds,
-                    viewModel = viewModel,
+                    slotIndex = 1, widgetIds = widgetIds, viewModel = viewModel,
+                    editMode = editMode,
                     onAddWidget = onAddWidget,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
+                    onLongPress = { editMode = true },
+                    onRemove = { editMode = false },
+                    modifier = Modifier.weight(1f).fillMaxWidth()
                 )
             }
-            // Right column: slots 2 and 3
             Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight(),
+                modifier = Modifier.weight(1f).fillMaxHeight(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 WidgetSlot(
-                    slotIndex = 2,
-                    widgetIds = widgetIds,
-                    viewModel = viewModel,
+                    slotIndex = 2, widgetIds = widgetIds, viewModel = viewModel,
+                    editMode = editMode,
                     onAddWidget = onAddWidget,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
+                    onLongPress = { editMode = true },
+                    onRemove = { editMode = false },
+                    modifier = Modifier.weight(1f).fillMaxWidth()
                 )
                 WidgetSlot(
-                    slotIndex = 3,
-                    widgetIds = widgetIds,
-                    viewModel = viewModel,
+                    slotIndex = 3, widgetIds = widgetIds, viewModel = viewModel,
+                    editMode = editMode,
                     onAddWidget = onAddWidget,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
+                    onLongPress = { editMode = true },
+                    onRemove = { editMode = false },
+                    modifier = Modifier.weight(1f).fillMaxWidth()
                 )
             }
         }
@@ -149,7 +148,10 @@ private fun WidgetSlot(
     slotIndex: Int,
     widgetIds: List<Int>,
     viewModel: WidgetViewModel,
+    editMode: Boolean,
     onAddWidget: () -> Unit,
+    onLongPress: () -> Unit,
+    onRemove: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val widgetId = widgetIds.getOrNull(slotIndex)
@@ -163,7 +165,12 @@ private fun WidgetSlot(
             WidgetCard(
                 widgetId = widgetId,
                 viewModel = viewModel,
-                onRemove = { viewModel.removeWidget(widgetId) }
+                editMode = editMode,
+                onLongPress = onLongPress,
+                onRemove = {
+                    viewModel.removeWidget(widgetId)
+                    onRemove()
+                }
             )
         } else {
             EmptySlot(onClick = onAddWidget)
@@ -171,41 +178,78 @@ private fun WidgetSlot(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun WidgetCard(
     widgetId: Int,
     viewModel: WidgetViewModel,
+    editMode: Boolean,
+    onLongPress: () -> Unit,
     onRemove: () -> Unit
 ) {
     val context = LocalContext.current
+    val density = LocalDensity.current
+    var cardSize by remember { mutableStateOf(IntSize.Zero) }
 
     val hostView = remember(widgetId) {
         val info = viewModel.appWidgetManager.getAppWidgetInfo(widgetId)
         val view = viewModel.appWidgetHost.createView(context, widgetId, info) as AppWidgetHostView
         view.setAppWidget(widgetId, info)
+        view.setPadding(0, 0, 0, 0)
         view
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .onSizeChanged { cardSize = it }
+            .combinedClickable(
+                onClick = {},
+                onLongClick = onLongPress
+            )
+    ) {
         AndroidView(
             factory = { hostView },
+            update = { view ->
+                if (cardSize != IntSize.Zero) {
+                    val widthDp = with(density) { cardSize.width.toDp().value.toInt() }
+                    val heightDp = with(density) { cardSize.height.toDp().value.toInt() }
+                    val options = Bundle().apply {
+                        putInt("appWidgetMinWidth", widthDp)
+                        putInt("appWidgetMaxWidth", widthDp)
+                        putInt("appWidgetMinHeight", heightDp)
+                        putInt("appWidgetMaxHeight", heightDp)
+                    }
+                    viewModel.appWidgetManager.updateAppWidgetOptions(widgetId, options)
+                }
+            },
             modifier = Modifier.fillMaxSize()
         )
 
-        IconButton(
-            onClick = onRemove,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(4.dp)
-                .size(28.dp)
-                .background(Color(0x99000000), CircleShape)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Close,
-                contentDescription = "Odebrat widget",
-                tint = Color.White,
-                modifier = Modifier.size(16.dp)
-            )
+        // Edit mode overlay
+        if (editMode) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0x88000000)),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(72.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFEF4444))
+                        .pointerInput(Unit) { detectTapGestures(onTap = { onRemove() }) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Odebrat widget",
+                        tint = Color.White,
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
+            }
         }
     }
 }
@@ -224,7 +268,7 @@ private fun EmptySlot(onClick: () -> Unit) {
         ) {
             Box(
                 modifier = Modifier
-                    .size(44.dp)
+                    .size(52.dp)
                     .clip(CircleShape)
                     .background(Color(0x1AFFFFFF)),
                 contentAlignment = Alignment.Center
@@ -233,7 +277,7 @@ private fun EmptySlot(onClick: () -> Unit) {
                     imageVector = Icons.Default.Add,
                     contentDescription = null,
                     tint = CarColors.Text2,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(28.dp)
                 )
             }
             Text(
