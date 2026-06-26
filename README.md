@@ -76,8 +76,11 @@ service/
 ## Screenshots
 
 <img width="1920" height="1200" alt="image" src="https://github.com/user-attachments/assets/80797ebd-efdd-4070-ac33-c4f40e059df6" />
-<img width="1920" height="1200" alt="image" src="https://github.com/user-attachments/assets/c83f60d1-d25f-419e-9fd6-13998f7d23f0" />
-<img width="1920" height="1200" alt="image" src="https://github.com/user-attachments/assets/71b1459e-070d-431c-bef1-36487b6c1e54" />
+<img width="1920" height="1200" alt="image" src="https://github.com/user-attachments/assets/e9f8166f-3805-453d-ade5-3812f2afb1a0" />
+<img width="1920" height="1200" alt="image" src="https://github.com/user-attachments/assets/7ca096b1-ff9b-41fa-87c0-ffe5f3e0c6e8" />
+
+
+
 
 
 
