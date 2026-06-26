@@ -232,22 +232,18 @@ private fun WidgetCard(
 
     val hostView = remember(widgetId) {
         val info = viewModel.appWidgetManager.getAppWidgetInfo(widgetId)
-        val view = viewModel.appWidgetHost.createView(context, widgetId, info) as AppWidgetHostView
+        val view = viewModel.appWidgetHost.createView(context, widgetId, info) as LongPressWidgetHostView
         view.setAppWidget(widgetId, info)
         view.setPadding(0, 0, 0, 0)
         view.layoutParams = ViewGroup.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
         )
-        // Long press detection via native listener — works even when widget children
-        // intercept touches before Compose overlay can see them.
-        view.isLongClickable = true
         view
     }
 
-    // Wire the current onEnterEditMode into the native long-click listener each recompose
-    // so the lambda always captures the latest state.
-    hostView.setOnLongClickListener { onEnterEditMode(); true }
+    // Update callback each recompose so it captures the latest onEnterEditMode lambda.
+    hostView.onLongPress = onEnterEditMode
 
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(

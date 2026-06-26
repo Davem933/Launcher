@@ -1,6 +1,5 @@
 package com.example.carlauncher.ui.widgets
 
-import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import androidx.datastore.preferences.core.edit
@@ -26,7 +25,7 @@ class WidgetViewModel @Inject constructor(
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
-    val appWidgetHost = AppWidgetHost(context, HOST_ID)
+    val appWidgetHost = LongPressWidgetHost(context, HOST_ID)
     val appWidgetManager: AppWidgetManager = AppWidgetManager.getInstance(context)
 
     private val _widgetIds = MutableStateFlow<List<Int>>(emptyList())
