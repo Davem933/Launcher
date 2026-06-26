@@ -256,14 +256,15 @@ class PmtilesHttpServer(private val file: File) : NanoHTTPD("127.0.0.1", 8888) {
     private fun zxyToTileId(z: Int, x: Int, y: Int): Long {
         if (z == 0) return 0L
         val acc = ((1L shl (2 * z)) - 1L) / 3L
+        val n = 1 shl z          // full grid width — rotation uses n, not s (PMTiles v3 spec)
         var d = 0L; var mx = x; var my = y
-        var s = 1 shl (z - 1)   // must be 2^(z-1), not z/2
+        var s = n shr 1
         while (s > 0) {
             val rx = if ((mx and s) > 0) 1 else 0
             val ry = if ((my and s) > 0) 1 else 0
             d += s.toLong() * s.toLong() * ((3 * rx) xor ry).toLong()
             if (ry == 0) {
-                if (rx == 1) { mx = s - 1 - mx; my = s - 1 - my }
+                if (rx == 1) { mx = n - 1 - mx; my = n - 1 - my }
                 val t = mx; mx = my; my = t
             }
             s = s shr 1
