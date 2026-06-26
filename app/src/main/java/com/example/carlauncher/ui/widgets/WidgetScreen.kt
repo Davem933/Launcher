@@ -8,18 +8,23 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -40,6 +45,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -57,8 +63,10 @@ fun WidgetScreen(
     dockViewModel: DockViewModel = hiltViewModel()
 ) {
     val widgetIds by viewModel.widgetIds.collectAsStateWithLifecycle()
+    val template  by viewModel.template.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
     var editMode by remember { mutableStateOf(false) }
+    var showTemplatePicker by remember { mutableStateOf(false) }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -77,65 +85,74 @@ fun WidgetScreen(
             .fillMaxSize()
             .background(CarColors.Bg)
     ) {
+        // ── Template picker button ────────────────────────────────────────────
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.End
+        ) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(CarColors.Surface)
+                    .pointerInput(Unit) {
+                        detectTapGestures(onTap = { showTemplatePicker = true })
+                    }
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.GridView,
+                        contentDescription = null,
+                        tint = CarColors.Text2,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = template.labelCs(),
+                        color = CarColors.Text2,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
+
+        // ── Widget grid ───────────────────────────────────────────────────────
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                // Tap on background cancels edit mode
                 .pointerInput(editMode) {
                     if (editMode) detectTapGestures(onTap = { editMode = false })
                 }
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 8.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Column(
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    WidgetSlot(
-                        slotIndex = 0, widgetIds = widgetIds, viewModel = viewModel,
+                items(
+                    count = template.slotCount,
+                    span = { index -> GridItemSpan(template.spans.getOrElse(index) { 1 }) }
+                ) { index ->
+                    val widgetId = widgetIds.getOrNull(index)
+                    SlotCard(
+                        widgetId = widgetId,
+                        viewModel = viewModel,
                         editMode = editMode,
                         onAddWidget = onAddWidget,
                         onEnterEditMode = { editMode = true },
                         onExitEditMode = { editMode = false },
-                        onRemove = { editMode = false },
-                        modifier = Modifier.weight(1f).fillMaxWidth()
-                    )
-                    WidgetSlot(
-                        slotIndex = 1, widgetIds = widgetIds, viewModel = viewModel,
-                        editMode = editMode,
-                        onAddWidget = onAddWidget,
-                        onEnterEditMode = { editMode = true },
-                        onExitEditMode = { editMode = false },
-                        onRemove = { editMode = false },
-                        modifier = Modifier.weight(1f).fillMaxWidth()
-                    )
-                }
-                Column(
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    WidgetSlot(
-                        slotIndex = 2, widgetIds = widgetIds, viewModel = viewModel,
-                        editMode = editMode,
-                        onAddWidget = onAddWidget,
-                        onEnterEditMode = { editMode = true },
-                        onExitEditMode = { editMode = false },
-                        onRemove = { editMode = false },
-                        modifier = Modifier.weight(1f).fillMaxWidth()
-                    )
-                    WidgetSlot(
-                        slotIndex = 3, widgetIds = widgetIds, viewModel = viewModel,
-                        editMode = editMode,
-                        onAddWidget = onAddWidget,
-                        onEnterEditMode = { editMode = true },
-                        onExitEditMode = { editMode = false },
-                        onRemove = { editMode = false },
-                        modifier = Modifier.weight(1f).fillMaxWidth()
+                        onRemove = {
+                            if (widgetId != null) viewModel.removeWidget(widgetId)
+                            editMode = false
+                        }
                     )
                 }
             }
@@ -149,24 +166,37 @@ fun WidgetScreen(
             onLaunchSplitScreen = onLaunchSplitScreen
         )
     }
+
+    if (showTemplatePicker) {
+        TemplatePickerDialog(
+            current = template,
+            onSelect = { tmpl ->
+                viewModel.setTemplate(tmpl)
+                showTemplatePicker = false
+                editMode = false
+            },
+            onDismiss = { showTemplatePicker = false }
+        )
+    }
 }
 
+// ── Slot card — filled or empty ───────────────────────────────────────────────
+
 @Composable
-private fun WidgetSlot(
-    slotIndex: Int,
-    widgetIds: List<Int>,
+private fun SlotCard(
+    widgetId: Int?,
     viewModel: WidgetViewModel,
     editMode: Boolean,
     onAddWidget: () -> Unit,
     onEnterEditMode: () -> Unit,
     onExitEditMode: () -> Unit,
-    onRemove: () -> Unit,
-    modifier: Modifier = Modifier
+    onRemove: () -> Unit
 ) {
-    val widgetId = widgetIds.getOrNull(slotIndex)
-
     Box(
-        modifier = modifier
+        modifier = Modifier
+            .fillMaxWidth()
+            // Let the grid row height be driven by content; use a reasonable min
+            .then(Modifier) // height managed by grid row
             .clip(RoundedCornerShape(20.dp))
             .background(CarColors.Surface)
     ) {
@@ -177,16 +207,15 @@ private fun WidgetSlot(
                 editMode = editMode,
                 onEnterEditMode = onEnterEditMode,
                 onExitEditMode = onExitEditMode,
-                onRemove = {
-                    viewModel.removeWidget(widgetId)
-                    onRemove()
-                }
+                onRemove = onRemove
             )
         } else {
             EmptySlot(onClick = onAddWidget)
         }
     }
 }
+
+// ── Filled widget card ────────────────────────────────────────────────────────
 
 @Composable
 private fun WidgetCard(
@@ -214,22 +243,18 @@ private fun WidgetCard(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // Widget view — behind the overlay
         AndroidView(
             factory = { hostView },
-            update = { view ->
-                // Push actual card dimensions as widget options so responsive widgets
-                // (e.g. Google Calendar) re-layout for the correct size
+            update = {
                 if (cardSize != IntSize.Zero) {
                     val wDp = with(density) { cardSize.width.toDp().value.toInt() }
                     val hDp = with(density) { cardSize.height.toDp().value.toInt() }
-                    val opts = Bundle().apply {
+                    viewModel.appWidgetManager.updateAppWidgetOptions(widgetId, Bundle().apply {
                         putInt("appWidgetMinWidth", wDp)
                         putInt("appWidgetMaxWidth", wDp)
                         putInt("appWidgetMinHeight", hDp)
                         putInt("appWidgetMaxHeight", hDp)
-                    }
-                    viewModel.appWidgetManager.updateAppWidgetOptions(widgetId, opts)
+                    })
                 }
             },
             modifier = Modifier
@@ -237,20 +262,18 @@ private fun WidgetCard(
                 .onSizeChanged { if (it != IntSize.Zero) cardSize = it }
         )
 
-        // Transparent overlay on top of the native view — intercepts long press.
-        // Must be AFTER AndroidView in the Box so it sits above it in z-order.
+        // Transparent overlay — captures long press above native view
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInput(editMode) {
                     detectTapGestures(
-                        onTap = { /* consume — don't let tap fall through in edit mode */ },
+                        onTap = {},
                         onLongPress = { onEnterEditMode() }
                     )
                 }
         )
 
-        // Edit mode: dark scrim — tap scrim = exit, tap koš = smazat
         if (editMode) {
             Box(
                 modifier = Modifier
@@ -266,9 +289,7 @@ private fun WidgetCard(
                         .size(72.dp)
                         .clip(CircleShape)
                         .background(Color(0xFFEF4444))
-                        .pointerInput(Unit) {
-                            detectTapGestures(onTap = { onRemove() })
-                        },
+                        .pointerInput(Unit) { detectTapGestures(onTap = { onRemove() }) },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -283,11 +304,14 @@ private fun WidgetCard(
     }
 }
 
+// ── Empty slot ────────────────────────────────────────────────────────────────
+
 @Composable
 private fun EmptySlot(onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxWidth()
+            .padding(vertical = 32.dp)
             .pointerInput(Unit) { detectTapGestures(onTap = { onClick() }) },
         contentAlignment = Alignment.Center
     ) {
@@ -315,6 +339,80 @@ private fun EmptySlot(onClick: () -> Unit) {
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium
             )
+        }
+    }
+}
+
+// ── Template picker dialog ────────────────────────────────────────────────────
+
+@Composable
+private fun TemplatePickerDialog(
+    current: WidgetLayoutTemplate,
+    onSelect: (WidgetLayoutTemplate) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = CarColors.Surface,
+            tonalElevation = 0.dp
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "Rozvržení widgetů",
+                    color = CarColors.Text,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                WidgetLayoutTemplate.entries.forEach { tmpl ->
+                    val selected = tmpl == current
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(
+                                if (selected) CarColors.Accent.copy(alpha = 0.18f)
+                                else Color(0x0DFFFFFF)
+                            )
+                            .pointerInput(tmpl) {
+                                detectTapGestures(onTap = { onSelect(tmpl) })
+                            }
+                            .padding(horizontal = 16.dp, vertical = 14.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    text = tmpl.labelCs(),
+                                    color = if (selected) CarColors.Accent else CarColors.Text,
+                                    fontSize = 14.sp,
+                                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+                                )
+                                Text(
+                                    text = "${tmpl.slotCount} sloty",
+                                    color = CarColors.Text2,
+                                    fontSize = 11.sp
+                                )
+                            }
+                            if (selected) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(CarColors.Accent)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

@@ -19,6 +19,7 @@ import javax.inject.Inject
 
 private val Context.widgetDataStore by preferencesDataStore(name = "widgets")
 private val WIDGET_IDS_KEY = stringPreferencesKey("widget_ids")
+private val TEMPLATE_KEY = stringPreferencesKey("layout_template")
 private const val HOST_ID = 1337
 
 @HiltViewModel
@@ -32,6 +33,9 @@ class WidgetViewModel @Inject constructor(
     private val _widgetIds = MutableStateFlow<List<Int>>(emptyList())
     val widgetIds: StateFlow<List<Int>> = _widgetIds.asStateFlow()
 
+    private val _template = MutableStateFlow(WidgetLayoutTemplate.GRID_2X2)
+    val template: StateFlow<WidgetLayoutTemplate> = _template.asStateFlow()
+
     init {
         appWidgetHost.startListening()
         viewModelScope.launch {
@@ -39,6 +43,10 @@ class WidgetViewModel @Inject constructor(
                 val raw = prefs[WIDGET_IDS_KEY] ?: ""
                 _widgetIds.value = if (raw.isEmpty()) emptyList()
                 else raw.split(",").mapNotNull { it.toIntOrNull() }
+
+                val tmpl = prefs[TEMPLATE_KEY] ?: ""
+                _template.value = WidgetLayoutTemplate.entries
+                    .firstOrNull { it.name == tmpl } ?: WidgetLayoutTemplate.GRID_2X2
             }
         }
     }
@@ -71,8 +79,25 @@ class WidgetViewModel @Inject constructor(
         viewModelScope.launch { persist(current) }
     }
 
-    private suspend fun persist(ids: List<Int>) {
-        context.widgetDataStore.edit { it[WIDGET_IDS_KEY] = ids.joinToString(",") }
+    fun canAddWidget(): Boolean = _widgetIds.value.size < _template.value.slotCount
+
+    fun setTemplate(tmpl: WidgetLayoutTemplate) {
+        val maxSlots = tmpl.slotCount
+        val current = _widgetIds.value
+        // Unbind widgets that exceed the new template's slot count
+        if (current.size > maxSlots) {
+            current.drop(maxSlots).forEach { appWidgetHost.deleteAppWidgetId(it) }
+        }
+        val trimmed = current.take(maxSlots)
+        _widgetIds.value = trimmed
+        viewModelScope.launch { persist(trimmed, tmpl) }
+    }
+
+    private suspend fun persist(ids: List<Int>, tmpl: WidgetLayoutTemplate = _template.value) {
+        context.widgetDataStore.edit { prefs ->
+            prefs[WIDGET_IDS_KEY] = ids.joinToString(",")
+            prefs[TEMPLATE_KEY] = tmpl.name
+        }
     }
 
     override fun onCleared() {
