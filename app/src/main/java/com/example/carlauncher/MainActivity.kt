@@ -47,7 +47,8 @@ class MainActivity : ComponentActivity() {
 
     private val widgetViewModel: WidgetViewModel by viewModels()
 
-    private var pendingWidgetId by mutableIntStateOf(-1)
+    private var pendingWidgetId  by mutableIntStateOf(-1)
+    private var pendingSlotIndex by mutableIntStateOf(-1)
 
     private val locationPermissionRequest = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -61,19 +62,21 @@ class MainActivity : ComponentActivity() {
             if (id != -1) configureOrAdd(id)
         } else if (pendingWidgetId != -1) {
             widgetViewModel.appWidgetHost.deleteAppWidgetId(pendingWidgetId)
-            pendingWidgetId = -1
+            pendingWidgetId  = -1
+            pendingSlotIndex = -1
         }
     }
 
     private val widgetConfigureLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        if (result.resultCode == RESULT_OK && pendingWidgetId != -1) {
-            widgetViewModel.addWidget(pendingWidgetId)
+        if (result.resultCode == RESULT_OK && pendingWidgetId != -1 && pendingSlotIndex != -1) {
+            widgetViewModel.addWidgetToSlot(pendingSlotIndex, pendingWidgetId)
         } else if (pendingWidgetId != -1) {
             widgetViewModel.appWidgetHost.deleteAppWidgetId(pendingWidgetId)
         }
-        pendingWidgetId = -1
+        pendingWidgetId  = -1
+        pendingSlotIndex = -1
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -109,7 +112,7 @@ class MainActivity : ComponentActivity() {
                             )
                             1 -> WidgetScreen(
                                 onLaunchSplitScreen = { pkg1, pkg2 -> launchSplitScreen(pkg1, pkg2) },
-                                onAddWidget = { launchWidgetPicker() }
+                                onAddWidget = { slotIndex -> launchWidgetPicker(slotIndex) }
                             )
                         }
                     }
@@ -137,8 +140,9 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun launchWidgetPicker() {
-        pendingWidgetId = widgetViewModel.allocateWidgetId()
+    private fun launchWidgetPicker(slotIndex: Int) {
+        pendingSlotIndex = slotIndex
+        pendingWidgetId  = widgetViewModel.allocateWidgetId()
         val intent = Intent(AppWidgetManager.ACTION_APPWIDGET_PICK).apply {
             putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, pendingWidgetId)
         }
@@ -155,8 +159,9 @@ class MainActivity : ComponentActivity() {
             }
             widgetConfigureLauncher.launch(configIntent)
         } else {
-            widgetViewModel.addWidget(appWidgetId)
-            pendingWidgetId = -1
+            widgetViewModel.addWidgetToSlot(pendingSlotIndex, appWidgetId)
+            pendingWidgetId  = -1
+            pendingSlotIndex = -1
         }
     }
 
