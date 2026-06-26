@@ -239,8 +239,15 @@ private fun WidgetCard(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.MATCH_PARENT
         )
+        // Long press detection via native listener — works even when widget children
+        // intercept touches before Compose overlay can see them.
+        view.isLongClickable = true
         view
     }
+
+    // Wire the current onEnterEditMode into the native long-click listener each recompose
+    // so the lambda always captures the latest state.
+    hostView.setOnLongClickListener { onEnterEditMode(); true }
 
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
@@ -260,18 +267,6 @@ private fun WidgetCard(
             modifier = Modifier
                 .fillMaxSize()
                 .onSizeChanged { if (it != IntSize.Zero) cardSize = it }
-        )
-
-        // Transparent overlay — captures long press above native view
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(editMode) {
-                    detectTapGestures(
-                        onTap = {},
-                        onLongPress = { onEnterEditMode() }
-                    )
-                }
         )
 
         if (editMode) {
