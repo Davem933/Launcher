@@ -39,12 +39,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
+import androidx.activity.ComponentActivity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
@@ -80,7 +80,10 @@ fun MapWidget(
     viewModel: MapViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
+    // Use the Activity lifecycle directly — HorizontalPager gives each page its own
+    // LocalLifecycleOwner that may not advance to RESUMED while the page is offscreen,
+    // which would leave MapView stuck in onStart() and rendering a black surface.
+    val lifecycleOwner = context as ComponentActivity
     val location by viewModel.vehicleLocation.collectAsStateWithLifecycle()
 
     val mapView = remember {
