@@ -1,13 +1,130 @@
 {
   "version": 8,
   "name": "CarLauncher Dark",
-  "sources": {},
+  "glyphs": "https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf",
+  "sprite": "https://protomaps.github.io/basemaps-assets/sprites/v4/dark",
+  "sources": {
+    "protomaps": {
+      "type": "vector",
+      "url": "pmtiles://file:///storage/emulated/0/CarLauncher/czech.pmtiles",
+      "attribution": "© OpenStreetMap"
+    }
+  },
   "layers": [
     {
       "id": "background",
       "type": "background",
+      "paint": { "background-color": "#0D0D0F" }
+    },
+    {
+      "id": "earth",
+      "type": "fill",
+      "source": "protomaps",
+      "source-layer": "earth",
+      "paint": { "fill-color": "#1A1A2E" }
+    },
+    {
+      "id": "water",
+      "type": "fill",
+      "source": "protomaps",
+      "source-layer": "water",
+      "paint": { "fill-color": "#1a3a5c" }
+    },
+    {
+      "id": "landuse_park",
+      "type": "fill",
+      "source": "protomaps",
+      "source-layer": "landuse",
+      "filter": ["in", "pmap:kind", "park", "nature_reserve", "forest", "wood"],
+      "paint": { "fill-color": "#1a2e1a" }
+    },
+    {
+      "id": "roads_highway",
+      "type": "line",
+      "source": "protomaps",
+      "source-layer": "roads",
+      "filter": ["in", "pmap:kind", "highway", "major_road"],
       "paint": {
-        "background-color": "#0D0D0F"
+        "line-color": "#FFD700",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 6, 1, 12, 3, 16, 8]
+      }
+    },
+    {
+      "id": "roads_medium",
+      "type": "line",
+      "source": "protomaps",
+      "source-layer": "roads",
+      "filter": ["in", "pmap:kind", "medium_road"],
+      "paint": {
+        "line-color": "#888888",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1, 14, 4, 16, 6]
+      }
+    },
+    {
+      "id": "roads_minor",
+      "type": "line",
+      "source": "protomaps",
+      "source-layer": "roads",
+      "filter": ["in", "pmap:kind", "minor_road"],
+      "paint": {
+        "line-color": "#555555",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 12, 0.5, 14, 2, 16, 4]
+      }
+    },
+    {
+      "id": "roads_labels",
+      "type": "symbol",
+      "source": "protomaps",
+      "source-layer": "roads",
+      "filter": [">=", ["zoom"], 13],
+      "layout": {
+        "symbol-placement": "line",
+        "text-field": "{name}",
+        "text-font": ["Noto Sans Regular"],
+        "text-size": 11,
+        "text-max-angle": 30
+      },
+      "paint": {
+        "text-color": "#CCCCCC",
+        "text-halo-color": "#0D0D0F",
+        "text-halo-width": 1
+      }
+    },
+    {
+      "id": "places_city",
+      "type": "symbol",
+      "source": "protomaps",
+      "source-layer": "places",
+      "filter": ["in", "pmap:kind", "city", "town"],
+      "layout": {
+        "text-field": "{name}",
+        "text-font": ["Noto Sans Bold"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 6, 10, 12, 14],
+        "text-anchor": "center"
+      },
+      "paint": {
+        "text-color": "#FFFFFF",
+        "text-halo-color": "#0D0D0F",
+        "text-halo-width": 1.5
+      }
+    },
+    {
+      "id": "places_village",
+      "type": "symbol",
+      "source": "protomaps",
+      "source-layer": "places",
+      "filter": ["in", "pmap:kind", "village", "suburb"],
+      "minzoom": 11,
+      "layout": {
+        "text-field": "{name}",
+        "text-font": ["Noto Sans Regular"],
+        "text-size": 11,
+        "text-anchor": "center"
+      },
+      "paint": {
+        "text-color": "#BBBBBB",
+        "text-halo-color": "#0D0D0F",
+        "text-halo-width": 1
       }
     }
   ]
