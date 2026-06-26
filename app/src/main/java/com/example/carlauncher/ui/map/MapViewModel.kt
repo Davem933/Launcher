@@ -30,6 +30,19 @@ class MapViewModel @Inject constructor(
     private val _nearbyPois = MutableStateFlow<List<Poi>>(emptyList())
     val nearbyPois: StateFlow<List<Poi>> = _nearbyPois.asStateFlow()
 
+    // Route polyline for map-snapping. Populate from navigation source when available;
+    // empty list = snapping disabled, marker follows raw GPS.
+    private val _routePolyline = MutableStateFlow<List<Pair<Double, Double>>>(emptyList())
+    val routePolyline: StateFlow<List<Pair<Double, Double>>> = _routePolyline.asStateFlow()
+
+    fun setRoutePolyline(points: List<Pair<Double, Double>>) {
+        _routePolyline.value = points
+    }
+
+    fun clearRoutePolyline() {
+        _routePolyline.value = emptyList()
+    }
+
     private val poiUseCase = PoiUseCase()
 
     init {

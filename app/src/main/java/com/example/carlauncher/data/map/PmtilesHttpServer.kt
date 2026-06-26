@@ -38,6 +38,12 @@ class PmtilesHttpServer(private val file: File) : NanoHTTPD("127.0.0.1", 8888) {
         }
     }
 
+    // Returns raw (possibly compressed) tile bytes + tileCompression value for debug inspection
+    fun getTileRaw(z: Int, x: Int, y: Int): Pair<ByteArray?, Int> {
+        val data = findTile(z, x, y)
+        return data to (header?.tileCompression ?: 2)
+    }
+
     // ── HTTP routing ──────────────────────────────────────────────────────────
 
     override fun serve(session: IHTTPSession): Response {

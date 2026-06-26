@@ -35,14 +35,13 @@ import com.example.carlauncher.ui.theme.CarColors
 
 @Composable
 fun LauncherScreen(
+    isDark: Boolean = true,
     onLaunchSplitScreen: (pkg1: String, pkg2: String) -> Unit = { _, _ -> },
     viewModel: LauncherViewModel = hiltViewModel(),
     dockViewModel: DockViewModel = hiltViewModel()
 ) {
     val location       by viewModel.vehicleLocation.collectAsStateWithLifecycle()
     val showAppDrawer  by dockViewModel.showAppDrawer.collectAsStateWithLifecycle()
-    val allApps        by dockViewModel.allApps.collectAsStateWithLifecycle()
-    val appIcons       by dockViewModel.appIcons.collectAsStateWithLifecycle()
     var debugOverlayVisible by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -74,6 +73,7 @@ fun LauncherScreen(
             ) {
                 // Left — map ~65% width (SpeedDisplay + Navigovat overlays inside)
                 MapWidget(
+                    isDark = isDark,
                     modifier = Modifier
                         .weight(1.85f)
                         .fillMaxHeight(),
@@ -132,8 +132,6 @@ fun LauncherScreen(
         exit  = fadeOut(tween(150))
     ) {
         AppDrawer(
-            apps = allApps,
-            icons = appIcons,
             onAppClick = { packageName ->
                 dockViewModel.closeAppDrawer()
                 dockViewModel.launchApp(packageName)

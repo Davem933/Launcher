@@ -11,6 +11,11 @@ class KalmanFilter {
     private var filteredLng: Double = 0.0
     private var lastTimestamp: Long = 0L
 
+    var lastGain: Double = 0.0
+        private set
+    var lastVariance: Double = 0.0
+        private set
+
     // Pre-allocated output — eliminates ~500 Pair<Double,Double> allocations per minute
     private val output = DoubleArray(2)
 
@@ -38,6 +43,8 @@ class KalmanFilter {
         filteredLat += gain * (lat - filteredLat)
         filteredLng += gain * (lng - filteredLng)
         variance *= (1.0 - gain)
+        lastGain = gain
+        lastVariance = variance
 
         output[0] = filteredLat
         output[1] = filteredLng

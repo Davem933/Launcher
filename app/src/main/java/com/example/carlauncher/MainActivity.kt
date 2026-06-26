@@ -22,9 +22,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.carlauncher.ui.theme.ThemeViewModel
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -97,7 +101,12 @@ class MainActivity : ComponentActivity() {
         )
 
         setContent {
-            CarLauncherTheme {
+            val themeVm = hiltViewModel<ThemeViewModel>()
+            val isDarkSensor by themeVm.isDarkTheme.collectAsStateWithLifecycle()
+            // If no physical light sensor, defer to Android system dark-mode schedule.
+            val isDark = if (themeVm.hasSensor) isDarkSensor else isSystemInDarkTheme()
+
+            CarLauncherTheme(isDark = isDark) {
                 val pagerState = rememberPagerState(pageCount = { 2 })
 
                 Box(modifier = Modifier.fillMaxSize()) {
@@ -108,6 +117,7 @@ class MainActivity : ComponentActivity() {
                     ) { page ->
                         when (page) {
                             0 -> LauncherScreen(
+                                isDark = isDark,
                                 onLaunchSplitScreen = { pkg1, pkg2 -> launchSplitScreen(pkg1, pkg2) }
                             )
                             1 -> WidgetScreen(

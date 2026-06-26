@@ -75,6 +75,7 @@ private class MapState {
 
 @Composable
 fun MapWidget(
+    isDark: Boolean = true,
     modifier: Modifier = Modifier,
     onNavigate: () -> Unit = {},
     viewModel: MapViewModel = hiltViewModel()
@@ -96,16 +97,19 @@ fun MapWidget(
     var mapAsyncReady by remember { mutableStateOf(false) }
     var isFollowing by remember { mutableStateOf(true) }
 
-    // Load Mapy.cz raster style as soon as MapLibre is ready
+    // Load Mapy.cz raster style as soon as MapLibre is ready.
+    // NOTE: Tile style is loaded once. MAPYCZ_BASIC is the only verified working URL;
+    // MAPYCZ_DARK exists in TileConfig but must be tested against the API before enabling.
+    // Calling setStyle() more than once (e.g. on isDark change) is not safe in MapLibre 11.5.x.
     LaunchedEffect(mapAsyncReady) {
         if (!mapAsyncReady) return@LaunchedEffect
         val map = mapState.map ?: return@LaunchedEffect
 
         val styleBuilder = when (viewModel.tileSource) {
-            TileSource.MAPYCZ  -> Style.Builder().fromJson(buildMapyczStyleJson(TileConfig.MAPYCZ_BASIC))
+            TileSource.MAPYCZ  -> Style.Builder().fromJson(buildMapyczStyleJson(TileConfig.MAPYCZ_BASIC, isDark))
             TileSource.DEMO    -> Style.Builder().fromUri(TileConfig.DEMO)
             // TODO: Přepnout na PMTILES po ověření POI vrstev na zařízení.
-            TileSource.PMTILES -> Style.Builder().fromJson(buildMapyczStyleJson(TileConfig.MAPYCZ_BASIC))
+            TileSource.PMTILES -> Style.Builder().fromJson(buildMapyczStyleJson(TileConfig.MAPYCZ_BASIC, isDark))
         }
         Log.d("MapWidget", "Loading style: ${viewModel.tileSource}")
         map.setStyle(styleBuilder) { style ->
@@ -228,10 +232,14 @@ fun MapWidget(
         val loc    = location ?: return@LaunchedEffect
         val source = mapState.source ?: return@LaunchedEffect
 
-        source.setGeoJson(featureWithBearing(loc.lat, loc.lng, loc.bearingDeg))
+        val (snapLat, snapLng) = RouteSnapHelper.snapToRoute(
+            loc.lat, loc.lng, viewModel.routePolyline.value
+        )
+
+        source.setGeoJson(featureWithBearing(snapLat, snapLng, loc.bearingDeg))
 
         if (isFollowing) {
-            mapState.map?.animateCamera(CameraUpdateFactory.newLatLng(LatLng(loc.lat, loc.lng)), 500)
+            mapState.map?.animateCamera(CameraUpdateFactory.newLatLng(LatLng(snapLat, snapLng)), 500)
         }
     }
 
