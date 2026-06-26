@@ -4,7 +4,10 @@ import android.appwidget.AppWidgetHostView
 import android.os.Bundle
 import android.view.ViewGroup
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -126,9 +129,6 @@ fun WidgetScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .pointerInput(editMode) {
-                    if (editMode) detectTapGestures(onTap = { editMode = false })
-                }
         ) {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
@@ -275,13 +275,21 @@ private fun WidgetCard(
         )
 
         if (editMode) {
+            // Dark scrim — purely visual, no gesture handler
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color(0x88000000))
-                    .pointerInput(Unit) {
-                        detectTapGestures(onTap = { onExitEditMode() })
-                    },
+            )
+            // Tap-to-exit region fills the card but sits BELOW the delete button in z-order
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) { detectTapGestures(onTap = { onExitEditMode() }) }
+            )
+            // Delete button — on top; tap consumed here, does NOT propagate to exit region
+            Box(
+                modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
                 Box(
@@ -289,7 +297,17 @@ private fun WidgetCard(
                         .size(72.dp)
                         .clip(CircleShape)
                         .background(Color(0xFFEF4444))
-                        .pointerInput(Unit) { detectTapGestures(onTap = { onRemove() }) },
+                        .pointerInput(Unit) {
+                            awaitEachGesture {
+                                val down = awaitFirstDown(requireUnconsumed = false)
+                                down.consume()
+                                val up = waitForUpOrCancellation()
+                                if (up != null) {
+                                    up.consume()
+                                    onRemove()
+                                }
+                            }
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
