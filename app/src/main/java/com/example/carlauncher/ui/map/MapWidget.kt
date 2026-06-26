@@ -108,7 +108,7 @@ fun MapWidget(
         val styleBuilder = when (viewModel.tileSource) {
             TileSource.MAPYCZ  -> Style.Builder().fromJson(buildMapyczStyleJson(TileConfig.MAPYCZ_BASIC, isDark))
             TileSource.DEMO    -> Style.Builder().fromUri(TileConfig.DEMO)
-            TileSource.PMTILES -> Style.Builder().fromJson(buildPmtilesStyleJson())
+            TileSource.PMTILES -> Style.Builder().fromUri("asset://style/map_style_dark.json")
         }
         Log.d("MapWidget", "Loading style: ${viewModel.tileSource}")
         map.setStyle(styleBuilder) { style ->
