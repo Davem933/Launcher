@@ -224,6 +224,7 @@ service/
 |---------|--------|
 | Adaptive GPS interval (500 ms driving → 5 s parked) | planned |
 | Speed limit roundel from OSM `maxspeed` | planned v0.3 |
+| POI integration — tap a nearby fuel station, parking or restaurant to navigate directly | planned |
 | QuickDest navigation wiring | placeholder UI only |
 | Offline map (PMTiles v3 + NanoHTTPD server) | code present, not wired |
 | LocationForegroundService | manifest stub only |
