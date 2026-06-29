@@ -89,6 +89,14 @@ class MediaListenerService : NotificationListenerService() {
 
         Log.d("NavListener", "→ street='$street' dist='$distance' eta='$eta' timeLeft='$timeLeft' distLeft='$distLeft'")
 
+        // Skip idle/logo-only notifications (e.g. Waze showing its icon when not navigating).
+        // Real navigation has at least a distance or a cancel action.
+        val hasNavContent = distance.isNotEmpty() || distLeft.isNotEmpty() || cancelIntent != null
+        if (!hasNavContent) {
+            Log.d("NavListener", "skip — no nav content (idle notification)")
+            return
+        }
+
         mainHandler.post {
             NavRepository.updateNavigation(
                 maneuverStreet    = street,
@@ -177,15 +185,15 @@ class MediaListenerService : NotificationListenerService() {
     // ── Icon extraction ───────────────────────────────────────────────────────
 
     private fun extractIcon(notification: Notification, pkg: String): Bitmap? {
-        // Waze large icon is always its app logo, not a turn arrow — skip it,
-        // NavWidget will fall back to the default Navigation arrow icon.
-        if (pkg != "com.waze") {
-            try {
-                val d = notification.getLargeIcon()?.loadDrawable(applicationContext)
-                if (d != null) return drawableToBitmap(d)
-            } catch (e: Exception) {
-                Log.w("NavListener", "getLargeIcon failed: ${e.message}")
-            }
+        // Waze icons (large and small) are always the app logo, not a turn arrow.
+        // Return null → NavWidget shows the default Navigation arrow instead.
+        if (pkg == "com.waze") return null
+
+        try {
+            val d = notification.getLargeIcon()?.loadDrawable(applicationContext)
+            if (d != null) return drawableToBitmap(d)
+        } catch (e: Exception) {
+            Log.w("NavListener", "getLargeIcon failed: ${e.message}")
         }
         try {
             val resId  = notification.smallIcon?.resId ?: return null
