@@ -32,6 +32,7 @@ import com.example.carlauncher.ui.dock.DockViewModel
 import com.example.carlauncher.ui.navigation.NavAreaWidget
 import com.example.carlauncher.ui.music.MusicWidget
 import com.example.carlauncher.ui.theme.CarColors
+import com.example.carlauncher.ui.launcher.WeatherCalendarWidget
 
 @Composable
 fun LauncherScreen(
@@ -96,7 +97,7 @@ fun LauncherScreen(
                     SystemControlsWidget(
                         modifier = Modifier.fillMaxWidth()
                     )
-                    QuickDestWidget(
+                    WeatherCalendarWidget(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
