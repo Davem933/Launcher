@@ -9,19 +9,19 @@
 The interface is split into three fixed horizontal bands:
 
 ```
-┌─────────────────────────────────────────────────────┐
-│  StatusBar — time · Czech date · battery · WiFi · GPS│
-├────────────────────────────────┬────────────────────┤
-│                                │   MusicWidget       │
-│         MapWidget              │                     │
-│   (GPS marker + speed)         ├────────────────────┤
-│                                │  QuickDestWidget    │
-├────────────────────────────────┴────────────────────┤
-│         DockBar — 6 configurable app slots           │
-└─────────────────────────────────────────────────────┘
++-----------------------------------------------------+
+|  StatusBar -- time . Czech date . battery . WiFi . GPS|
++--------------------------------+--------------------+
+|                                |   MusicWidget       |
+|         MapWidget              |                     |
+|   (GPS marker + speed)         +--------------------+
+|                                | WeatherCalendar     |
++--------------------------------+--------------------+
+|         DockBar -- 6 configurable app slots          |
++-----------------------------------------------------+
 ```
 
-Swipe left from the main screen to reach the **Smart Stacks** widget page — a grid of Android home screen widgets stacked per slot.
+When navigation is active, **NavWidget** replaces the right column with turn-by-turn instructions.
 
 ---
 
@@ -39,39 +39,41 @@ Swipe left from the main screen to reach the **Smart Stacks** widget page — a 
 - MapLibre GL with **Mapy.cz** raster tiles
 - Smooth GPS marker with real-time bearing rotation
 - Auto-follow camera with 10 s timeout after manual pan
-- Nearby **POI overlay** — fuel stations, parking, restaurants, hospitals
-- Speed display with color thresholds: white < 90 km/h · orange 90–120 · red > 120
+- Nearby **POI overlay** -- fuel stations, parking, restaurants, hospitals
+- Speed display with color thresholds: white < 90 km/h . orange 90-120 . red > 120
 
 ### GPS Pipeline
 ```
 FusedLocationProviderClient (500 ms interval)
-  → LocationProcessor
-      → 2D Kalman filter (Q = 3 m/s) — smooths GPS noise
-      → Rolling average speed (last 3 samples)
-  → VehicleDisplayLocation StateFlow
-  → MapViewModel + LauncherViewModel
+  -> LocationProcessor
+      -> 2D Kalman filter (Q = 3 m/s) -- smooths GPS noise
+      -> Rolling average speed (last 3 samples)
+  -> VehicleDisplayLocation StateFlow
+  -> MapViewModel + LauncherViewModel
 ```
 
-### Smart Stacks (widget page)
-- Each grid slot holds a **stack** of standard Android widgets
-- Swipe up/down inside a card to switch between stacked widgets
-- Vertical stack indicator on the right edge (active = white, inactive = dim)
-- Three layout templates:
+### Navigation (NavWidget)
+- Parses **Google Maps** and **Waze** notifications in real time via `NotificationListenerService`
+- Center: **"za X m"** (distance to next maneuver) + street name below — hidden at 0 m
+- Bottom bar: current speed . route progress bar . ETA . End navigation button
+- Handles Google Maps non-breaking spaces in distance strings and content-based trip summary detection (ETA / time remaining / distance remaining)
+- Maneuver arrow icon from notification large icon
 
-| Template | Slots | Layout |
-|----------|-------|--------|
-| 2 × 2 Grid | 4 | equal quadrants |
-| Large top + 2 small | 3 | full-width top, two halves below |
-| 2 wide rows | 2 | two full-width slots |
-
-- Long-press any widget to enter edit mode → delete or add to that slot
-- Widget picker launches Android's system widget chooser
+### Weather + Calendar (WeatherCalendarWidget)
+- **Weather**: [Open-Meteo](https://open-meteo.com) API — free, no key required; temperature, WMO condition, icon; refreshes every 30 min; coordinates from GPS with Prague fallback
+- **Calendar**: Android `CalendarContract` — today's events (max 3), colored dot from calendar color, time or "all day"
 
 ### Music Widget
 - Reads the active **MediaSession** via `MediaSessionManager`
 - Album art, track title, artist, real-time progress bar
 - Play / pause / skip controls
 - Requires notification access (`NotificationListenerService`) — the widget shows a grant-access button if permission is missing
+
+### System Controls
+- **Volume** (blue) and **Brightness** (amber) cards
+- Colored fill rises from the bottom of the card based on current level
+- Swipe up to increase, swipe down to decrease — 1.5x sensitivity for comfortable in-car use
+- Brightness changes the window attribute directly (no `WRITE_SETTINGS` required)
 
 ### Dock Bar
 - 6 configurable slots, persisted in **DataStore**
@@ -83,15 +85,10 @@ FusedLocationProviderClient (500 ms interval)
 - Split-screen is launched with `FLAG_ACTIVITY_LAUNCH_ADJACENT` after a 650 ms delay so Android has time to open the first app
 
 ### Status Bar
-- Time in `HH:mm`, Czech date (`pondělí 26. června`)
+- Time in `HH:mm`, Czech date (`pondeli 26. cervna`)
 - Battery percentage + icon
 - WiFi indicator
-- GPS dot — green = fix, red = no signal
-- Volume slider + brightness slider (tap the icons on the right to open)
-
-### System Controls
-- Volume and brightness sliders accessible from the status bar
-- Android `AudioManager` for volume, `Settings.System.SCREEN_BRIGHTNESS` for brightness
+- GPS dot -- green = fix, red = no signal
 
 ---
 
@@ -108,7 +105,9 @@ FusedLocationProviderClient (500 ms interval)
 | State management | StateFlow + ViewModel |
 | Persistence | DataStore Preferences |
 | Media | MediaSessionManager + NotificationListenerService |
-| Widgets | AppWidgetHost / AppWidgetManager |
+| Navigation | NotificationListenerService (Google Maps / Waze) |
+| Weather | Open-Meteo REST API (no key) |
+| Calendar | Android CalendarContract |
 | POI data | OpenStreetMap Overpass API |
 
 ---
@@ -120,7 +119,7 @@ FusedLocationProviderClient (500 ms interval)
 | Device | Lenovo Tab M10 Plus (3rd Gen) |
 | Chipset | MediaTek Helio G80 |
 | Android | 16 (API 36) |
-| Screen | ~1143 × 686 dp — landscape locked, fullscreen |
+| Screen | ~1143 x 686 dp -- landscape locked, fullscreen |
 | minSdk | 31 |
 | compileSdk / targetSdk | 36 |
 
@@ -133,7 +132,7 @@ FusedLocationProviderClient (500 ms interval)
 ### Prerequisites
 - Android Studio Hedgehog or later
 - ADB in PATH or via `$env:LOCALAPPDATA\Android\Sdk\platform-tools\`
-- A **Mapy.cz API key** (free tier works) — [get one here](https://developer.mapy.cz/)
+- A **Mapy.cz API key** (free tier works) -- [get one here](https://developer.mapy.cz/)
 
 ### Setup
 
@@ -158,20 +157,14 @@ $adb = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
 & $adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-### ADB logcat (key tags)
-
-```powershell
-$adb = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
-& $adb logcat -s MediaDebug,PackageCheck,MapWidget,DockViewModel -d
-```
-
 ---
 
 ## First-run Setup
 
-1. **Set as home launcher** — Android will prompt on first launch, or go to *Settings → Apps → Default apps → Home app → CarLauncher*
-2. **Notification access** — required for the music widget: *Settings → Apps → Special app access → Notification access → CarLauncher → Enable*
-3. **Location permission** — requested automatically on first launch; grant *Precise location*
+1. **Set as home launcher** -- Android will prompt on first launch, or go to *Settings > Apps > Default apps > Home app > CarLauncher*
+2. **Notification access** -- required for music widget and navigation: *Settings > Apps > Special app access > Notification access > CarLauncher > Enable*
+3. **Location permission** -- requested automatically on first launch; grant *Precise location*
+4. **Calendar permission** -- `READ_CALENDAR` requested on first launch; grant to enable the calendar widget
 
 ---
 
@@ -181,56 +174,62 @@ Single-module app (`app/`). Package layout:
 
 ```
 ui/
-  launcher/     LauncherScreen (root layout), LauncherViewModel
-                StatusBar, QuickDestWidget
+  launcher/     LauncherScreen, LauncherViewModel, StatusBar
+                WeatherCalendarWidget, WeatherCalendarViewModel
+                SystemControlsWidget
   map/          MapWidget, MapViewModel, MapStyleHelper, TileConfig
   speed/        SpeedDisplay
   music/        MusicWidget, MediaViewModel
+  navigation/   NavWidget
   dock/         DockBar, DockViewModel, SlotPicker
-  widgets/      WidgetScreen, WidgetViewModel
-                WidgetLayoutTemplate, LongPressWidgetHost
   theme/        CarLauncherTheme (dark only), CarColors
 
 data/
   location/     LocationRepository, LocationProcessor, KalmanFilter
   media/        MediaSessionObserver
+  navigation/   NavRepository
+  weather/      WeatherRepository
+  calendar/     CalendarRepository
   dock/         DockDataStoreExt
-  map/          PmtilesHttpServer (offline tile server — not active)
+  map/          PmtilesHttpServer (offline tile server -- not active)
   model/        VehicleDisplayLocation, TrackInfo, DockItem, DockSlot
 
 di/
   LocationModule
 
 service/
-  LocationForegroundService  (stub — not yet implemented)
-  MediaListenerService       (NotificationListenerService)
+  MediaListenerService   (NotificationListenerService -- media + navigation)
+  LocationForegroundService  (stub)
 ```
-
-### Key architectural decisions
-
-**Hilt everywhere** — `@HiltAndroidApp` on `CarLauncherApp`, `@AndroidEntryPoint` on `MainActivity`. ViewModels use `@HiltViewModel`. Types without `@Inject constructor` (e.g. `FusedLocationProviderClient`) are provided via modules in `di/`.
-
-**Fullscreen** — `MainActivity` hides status and nav bars via `WindowInsetsControllerCompat` and sets `FLAG_KEEP_SCREEN_ON`. `enableEdgeToEdge()` is intentionally NOT called — it conflicts with the manual insets setup.
-
-**MapLibre in Compose** — `MapView` runs in an `AndroidView`. TextureMode (`MapLibreMapOptions.textureMode(true)`) is required so Compose's `clip()` / rounded corners work — the default SurfaceView is composited outside the Compose hierarchy and ignores clip modifiers. `MapLibreMap` and `GeoJsonSource` are stored in a plain class inside `remember {}`, never in `mutableStateOf` (MapLibre objects are not snapshot-safe).
-
-**Widget long-press** — implemented via a custom `LongPressWidgetHostView extends AppWidgetHostView` that uses `dispatchTouchEvent` + `GestureDetectorCompat`. Standard `setOnLongClickListener` fails because child views consume `ACTION_DOWN`. A `longPressConsumed` flag replaces the following `ACTION_UP` with `ACTION_CANCEL` so the widget doesn't launch its app after the long-press fires.
 
 ---
 
-## Planned / In Progress
+## Changelog
+
+### v0.2.0
+- **NavWidget** -- real-time Google Maps / Waze navigation overlay; distance + street; route progress bar; ETA
+- **WeatherCalendarWidget** -- Open-Meteo weather + Android calendar events; replaces quick-dest placeholder
+- **System Controls** -- volume/brightness cards with fill-from-bottom visual; swipe up/down gesture
+
+### v0.1.0
+- Core launcher: map, speedometer, music widget, dock
+- Smooth GPS marker with Kalman filter + EMA bearing
+- POI overlay (Overpass API)
+- Smart Stacks widget page
+
+---
+
+## Planned
 
 | Feature | Status |
 |---------|--------|
-| Adaptive GPS interval (500 ms driving → 5 s parked) | planned |
+| Adaptive GPS interval (500 ms driving -> 5 s parked) | planned |
 | Speed limit roundel from OSM `maxspeed` | planned v0.3 |
-| POI integration — tap a nearby fuel station, parking or restaurant to navigate directly | planned |
-| QuickDest navigation wiring | placeholder UI only |
-| Offline map (PMTiles v3 + NanoHTTPD server) | code present, not wired |
+| Offline map (PMTiles v3 + NanoHTTPD) | code present, not wired |
 | LocationForegroundService | manifest stub only |
 
 ---
 
 ## License
 
-Personal project — not licensed for redistribution.
+Personal project -- not licensed for redistribution.
