@@ -8,7 +8,7 @@ import androidx.compose.runtime.setValue
 
 /**
  * Thread-safe singleton nav state. All mutations must arrive on the main thread
- * (NavNotificationListener dispatches via mainHandler.post) so Compose snapshot
+ * (MediaListenerService dispatches via mainHandler.post) so Compose snapshot
  * reads are always consistent.
  */
 object NavRepository {
@@ -34,6 +34,13 @@ object NavRepository {
     var cancelIntent by mutableStateOf<PendingIntent?>(null)
         private set
 
+    // Tracks the largest distance seen since nav started — used as total route length.
+    private var totalDistanceMeters: Float = 0f
+
+    /** 0f–1f: fraction of route already driven. 0 until we have a reference total. */
+    var progressFraction by mutableStateOf(0f)
+        private set
+
     val isActive: Boolean
         get() = maneuverStreet.isNotEmpty() || maneuverDistance.isNotEmpty()
 
@@ -53,15 +60,39 @@ object NavRepository {
         this.timeRemaining     = timeRemaining
         this.distanceRemaining = distanceRemaining
         this.cancelIntent      = cancelIntent
+
+        val remainingM = parseDistanceToMeters(distanceRemaining)
+        if (remainingM > totalDistanceMeters) totalDistanceMeters = remainingM
+        progressFraction = if (totalDistanceMeters > 0f)
+            ((totalDistanceMeters - remainingM) / totalDistanceMeters).coerceIn(0f, 1f)
+        else 0f
     }
 
     fun clearNavigation() {
-        maneuverDistance  = ""
-        maneuverStreet    = ""
-        maneuverIcon      = null
-        eta               = ""
-        timeRemaining     = ""
-        distanceRemaining = ""
-        cancelIntent      = null
+        maneuverDistance    = ""
+        maneuverStreet      = ""
+        maneuverIcon        = null
+        eta                 = ""
+        timeRemaining       = ""
+        distanceRemaining   = ""
+        cancelIntent        = null
+        totalDistanceMeters = 0f
+        progressFraction    = 0f
+    }
+
+    /** Parses "8.4 km", "800 m", "1,2 km" etc. → metres. Returns 0 on failure. */
+    private fun parseDistanceToMeters(s: String): Float {
+        val clean = s.trim().replace(',', '.')
+        return when {
+            clean.contains("km", ignoreCase = true) ->
+                clean.replace(Regex("[^0-9.]"), "").toFloatOrNull()?.times(1000f) ?: 0f
+            clean.contains("mi", ignoreCase = true) ->
+                clean.replace(Regex("[^0-9.]"), "").toFloatOrNull()?.times(1609f) ?: 0f
+            clean.contains("ft", ignoreCase = true) ->
+                clean.replace(Regex("[^0-9.]"), "").toFloatOrNull()?.times(0.305f) ?: 0f
+            clean.any { it.isDigit() } ->
+                clean.replace(Regex("[^0-9.]"), "").toFloatOrNull() ?: 0f
+            else -> 0f
+        }
     }
 }

@@ -5,8 +5,10 @@ import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -38,10 +41,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.graphics.asImageBitmap
 import com.example.carlauncher.data.navigation.NavRepository
 import com.example.carlauncher.ui.theme.CarColors
-import androidx.compose.foundation.clickable
 
 private val NavGreen    = Color(0xFF4ADE80)
 private val BottomBg    = Color(0xFF111318)
@@ -59,6 +60,7 @@ fun NavWidget(
     val eta               = NavRepository.eta
     val distanceRemaining = NavRepository.distanceRemaining
     val cancelIntent      = NavRepository.cancelIntent
+    val progressFraction  = NavRepository.progressFraction
 
     Column(
         modifier = modifier
@@ -135,10 +137,11 @@ fun NavWidget(
 
         // ── Bottom bar ────────────────────────────────────────────────────────
         NavBottomBar(
-            speedKmh      = speedKmh,
-            distRemaining = distanceRemaining,
-            eta           = eta,
-            cancelIntent  = cancelIntent,
+            speedKmh        = speedKmh,
+            distRemaining   = distanceRemaining,
+            eta             = eta,
+            cancelIntent    = cancelIntent,
+            progressFraction = progressFraction,
         )
     }
 }
@@ -151,23 +154,26 @@ private fun NavBottomBar(
     distRemaining: String,
     eta: String,
     cancelIntent: PendingIntent?,
+    progressFraction: Float,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(BottomBg)
-            .padding(horizontal = 20.dp, vertical = 14.dp),
+            .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        // Speed + limit
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        // ── Speed + limit badge ───────────────────────────────────────────────
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.wrapContentWidth(),
+        ) {
             Text(
                 text = buildAnnotatedString {
-                    withStyle(SpanStyle(fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = CarColors.Text)) {
+                    withStyle(SpanStyle(fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = CarColors.Text)) {
                         append(speedKmh.toInt().toString())
                     }
-                    withStyle(SpanStyle(fontSize = 12.sp, color = CarColors.Text3)) {
+                    withStyle(SpanStyle(fontSize = 11.sp, color = CarColors.Text3)) {
                         append(" km/h")
                     }
                 }
@@ -176,72 +182,79 @@ private fun NavBottomBar(
             SpeedLimitBadge(limit = "50")
         }
 
-        // Distance remaining
-        if (distRemaining.isNotEmpty()) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = "Zbývá $distRemaining",
-                    color = CarColors.Text2,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                )
-                Spacer(Modifier.height(4.dp))
-                // Progress indicator line (decorative — no total distance available)
+        Spacer(Modifier.width(16.dp))
+
+        // ── Distance remaining + progress bar (fills available space) ─────────
+        Column(
+            modifier = Modifier.weight(1f),
+            horizontalAlignment = Alignment.Start,
+        ) {
+            Text(
+                text = if (distRemaining.isNotEmpty()) "Zbývá $distRemaining" else "",
+                color = CarColors.Text2,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+            )
+            Spacer(Modifier.height(5.dp))
+            // Full-width progress bar — green portion = driven fraction of route
+            BoxWithConstraints(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .clip(CircleShape)
+                    .background(CarColors.Surface3),
+            ) {
                 Box(
                     modifier = Modifier
-                        .width(80.dp)
-                        .height(3.dp)
+                        .width(maxWidth * progressFraction)
+                        .height(4.dp)
                         .clip(CircleShape)
-                        .background(CarColors.Surface3)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .width(32.dp)
-                            .height(3.dp)
-                            .clip(CircleShape)
-                            .background(NavGreen)
-                    )
-                }
+                        .background(NavGreen)
+                )
             }
         }
 
-        // ETA
+        Spacer(Modifier.width(16.dp))
+
+        // ── ETA ──────────────────────────────────────────────────────────────
         if (eta.isNotEmpty()) {
             Text(
                 text = eta,
                 color = CarColors.Text2,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.wrapContentWidth(),
             )
+            Spacer(Modifier.width(12.dp))
         }
 
-        // Cancel / Ukončit
-        if (cancelIntent != null) {
-            Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(CancelBg)
-                    .clickable {
+        // ── Ukončit ───────────────────────────────────────────────────────────
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(10.dp))
+                .background(CancelBg)
+                .then(
+                    if (cancelIntent != null) Modifier.clickable {
                         try { cancelIntent.send() }
                         catch (_: PendingIntent.CanceledException) {}
-                    }
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Ukončit",
-                    tint = CarColors.Text2,
-                    modifier = Modifier.size(14.dp),
+                    } else Modifier
                 )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = "Ukončit",
-                    color = CarColors.Text2,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium,
-                )
-            }
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = "Ukončit",
+                tint = CarColors.Text2,
+                modifier = Modifier.size(13.dp),
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = "Ukončit",
+                color = CarColors.Text2,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+            )
         }
     }
 }
