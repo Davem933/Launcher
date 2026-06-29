@@ -63,6 +63,7 @@ fun NavWidget(
     val arrivalTime       = NavRepository.eta
         .removePrefix("Příjezd: ").removePrefix("Příjezd:")
         .removePrefix("Arrival: ").removePrefix("Arrival:")
+        .removeSuffix(" příjezd").removeSuffix(" Příjezd")
         .trim()
     val cancelIntent      = NavRepository.cancelIntent
     val progressFraction  = NavRepository.progressFraction

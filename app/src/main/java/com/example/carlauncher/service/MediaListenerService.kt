@@ -131,7 +131,7 @@ class MediaListenerService : NotificationListenerService() {
      */
     private fun parseTripSummary(summary: String): Triple<String, String, String> {
         if (summary.isBlank()) return Triple("", "", "")
-        val parts = summary.split('·').map { it.trim() }.filter { it.isNotEmpty() }
+        val parts = summary.split('·', '•').map { it.trim() }.filter { it.isNotEmpty() }
         var arrival  = ""   // contains ":" → arrival time  e.g. "Příjezd: 15:05"
         var timeLeft = ""   // contains "min" or "h "       e.g. "1 h 2 min"
         var distLeft = ""   // contains "km" or ends in " m" e.g. "62 km"
