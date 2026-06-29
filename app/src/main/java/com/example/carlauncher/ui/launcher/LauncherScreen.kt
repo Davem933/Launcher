@@ -42,6 +42,7 @@ fun LauncherScreen(
     dockViewModel: DockViewModel = hiltViewModel()
 ) {
     val location       by viewModel.vehicleLocation.collectAsStateWithLifecycle()
+    val speedLimit     by viewModel.speedLimit.collectAsStateWithLifecycle()
     val showAppDrawer  by dockViewModel.showAppDrawer.collectAsStateWithLifecycle()
     var debugOverlayVisible by remember { mutableStateOf(false) }
 
@@ -75,6 +76,7 @@ fun LauncherScreen(
                 // Left — nav area ~65% width
                 NavAreaWidget(
                     speedKmh = location?.speedKmh ?: 0f,
+                    speedLimitKmh = speedLimit,
                     modifier = Modifier
                         .weight(1.85f)
                         .fillMaxHeight()

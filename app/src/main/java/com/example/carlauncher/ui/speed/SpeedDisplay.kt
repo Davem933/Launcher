@@ -34,6 +34,7 @@ private val Shape = RoundedCornerShape(18.dp)
 @Composable
 fun SpeedDisplay(
     speedKmh: Float,
+    speedLimitKmh: Int = 50,
     modifier: Modifier = Modifier
 ) {
     // remember — skip re-calculation on recompose when speed hasn't changed
@@ -86,7 +87,7 @@ fun SpeedDisplay(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "50",
+                text = "$speedLimitKmh",
                 style = TextStyle(
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,

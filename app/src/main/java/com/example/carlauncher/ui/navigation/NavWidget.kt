@@ -52,6 +52,7 @@ private val CancelBg    = Color(0xFF252830)
 @Composable
 fun NavWidget(
     speedKmh: Float = 0f,
+    speedLimitKmh: Int = 50,
     modifier: Modifier = Modifier,
 ) {
     val street            = NavRepository.maneuverStreet
@@ -161,6 +162,7 @@ fun NavWidget(
         // ── Bottom bar ────────────────────────────────────────────────────────
         NavBottomBar(
             speedKmh         = speedKmh,
+            speedLimitKmh    = speedLimitKmh,
             distRemaining    = distanceRemaining,
             timeRemaining    = timeRemaining,
             arrivalTime      = arrivalTime,
@@ -175,6 +177,7 @@ fun NavWidget(
 @Composable
 private fun NavBottomBar(
     speedKmh: Float,
+    speedLimitKmh: Int,
     distRemaining: String,
     timeRemaining: String,
     arrivalTime: String,
@@ -204,7 +207,7 @@ private fun NavBottomBar(
                 }
             )
             Spacer(Modifier.width(10.dp))
-            SpeedLimitBadge(limit = "50")
+            SpeedLimitBadge(limit = "$speedLimitKmh")
         }
 
         Spacer(Modifier.width(16.dp))

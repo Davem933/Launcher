@@ -84,7 +84,8 @@ fun MapWidget(
     // LocalLifecycleOwner that may not advance to RESUMED while the page is offscreen,
     // which would leave MapView stuck in onStart() and rendering a black surface.
     val lifecycleOwner = context as ComponentActivity
-    val location by viewModel.vehicleLocation.collectAsStateWithLifecycle()
+    val location   by viewModel.vehicleLocation.collectAsStateWithLifecycle()
+    val speedLimit by viewModel.speedLimit.collectAsStateWithLifecycle()
 
     val mapView = remember {
         // textureMode: render via TextureView so Compose clip() can round the corners
@@ -187,6 +188,7 @@ fun MapWidget(
 
         SpeedDisplay(
             speedKmh = location?.speedKmh ?: 0f,
+            speedLimitKmh = speedLimit,
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(start = 18.dp, bottom = 18.dp)  // dock no longer overlays the map

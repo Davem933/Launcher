@@ -63,10 +63,11 @@ private val NAV_APPS = listOf(
 @Composable
 fun NavAreaWidget(
     speedKmh: Float = 0f,
+    speedLimitKmh: Int = 50,
     modifier: Modifier = Modifier,
 ) {
     if (NavRepository.isActive) {
-        NavWidget(speedKmh = speedKmh, modifier = modifier)
+        NavWidget(speedKmh = speedKmh, speedLimitKmh = speedLimitKmh, modifier = modifier)
     } else {
         NavLanding(modifier = modifier)
     }

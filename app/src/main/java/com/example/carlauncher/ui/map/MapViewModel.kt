@@ -9,6 +9,7 @@ import com.example.carlauncher.data.model.Poi
 import com.example.carlauncher.data.model.VehicleDisplayLocation
 import com.example.carlauncher.data.poi.PoiRepository
 import com.example.carlauncher.data.poi.PoiUseCase
+import com.example.carlauncher.data.speedlimit.SpeedLimitRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,10 +22,12 @@ import javax.inject.Inject
 @HiltViewModel
 class MapViewModel @Inject constructor(
     repository: LocationRepository,
-    private val poiRepository: PoiRepository
+    private val poiRepository: PoiRepository,
+    speedLimitRepository: SpeedLimitRepository,
 ) : ViewModel() {
 
     val vehicleLocation: StateFlow<VehicleDisplayLocation?> = repository.vehicleLocation
+    val speedLimit: StateFlow<Int> = speedLimitRepository.speedLimit
 
     private val _nearbyPois = MutableStateFlow<List<Poi>>(emptyList())
     val nearbyPois: StateFlow<List<Poi>> = _nearbyPois.asStateFlow()
