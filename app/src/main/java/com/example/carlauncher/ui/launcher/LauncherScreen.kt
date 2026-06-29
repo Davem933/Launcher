@@ -73,6 +73,7 @@ fun LauncherScreen(
             ) {
                 // Left — nav area ~65% width
                 NavAreaWidget(
+                    speedKmh = location?.speedKmh ?: 0f,
                     modifier = Modifier
                         .weight(1.85f)
                         .fillMaxHeight()

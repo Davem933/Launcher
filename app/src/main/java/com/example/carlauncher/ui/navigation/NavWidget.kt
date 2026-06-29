@@ -22,290 +22,247 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.asImageBitmap
 import com.example.carlauncher.data.navigation.NavRepository
 import com.example.carlauncher.ui.theme.CarColors
+import androidx.compose.foundation.clickable
 
-// ── Design tokens ─────────────────────────────────────────────────────────────
-private val NavBg       = Color(0xFF1C1B1F)
-private val NavGreen    = Color(0xFF34A853)
-private val NavRed      = Color(0xCCE53935)   // semi-transparent cancel
-private val BarDivider  = Color(0xFF2E2D33)
-private val LabelColor  = CarColors.Text3
+private val NavGreen    = Color(0xFF4ADE80)
+private val BottomBg    = Color(0xFF111318)
+private val SpeedLimitRed = Color(0xFFE53935)
+private val CancelBg    = Color(0xFF252830)
 
 @Composable
-fun NavWidget(modifier: Modifier = Modifier) {
-    val isActive          = NavRepository.isActive
-    val maneuverDistance  = NavRepository.maneuverDistance
-    val maneuverStreet    = NavRepository.maneuverStreet
-    val maneuverIcon      = NavRepository.maneuverIcon
+fun NavWidget(
+    speedKmh: Float = 0f,
+    modifier: Modifier = Modifier,
+) {
+    val street            = NavRepository.maneuverStreet
+    val distance          = NavRepository.maneuverDistance
+    val icon              = NavRepository.maneuverIcon
     val eta               = NavRepository.eta
-    val timeRemaining     = NavRepository.timeRemaining
     val distanceRemaining = NavRepository.distanceRemaining
     val cancelIntent      = NavRepository.cancelIntent
 
-    Box(
+    Column(
         modifier = modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(NavBg)
-            .border(1.dp, CarColors.BorderSoft, RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(24.dp))
+            .background(CarColors.Bg)
+            .border(1.dp, CarColors.BorderSoft, RoundedCornerShape(24.dp)),
     ) {
-        if (!isActive) {
-            NavPlaceholder(modifier = Modifier.fillMaxSize())
-        } else {
-            NavContent(
-                maneuverDistance  = maneuverDistance,
-                maneuverStreet    = maneuverStreet,
-                maneuverIcon      = maneuverIcon,
-                eta               = eta,
-                timeRemaining     = timeRemaining,
-                distanceRemaining = distanceRemaining,
-                cancelIntent      = cancelIntent,
-                modifier          = Modifier.fillMaxSize(),
-            )
-        }
-    }
-}
-
-// ── Placeholder ───────────────────────────────────────────────────────────────
-
-@Composable
-private fun NavPlaceholder(modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier.padding(20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Icon(
-            imageVector = Icons.Default.Navigation,
-            contentDescription = null,
-            tint = CarColors.Text3,
-            modifier = Modifier.size(36.dp),
-        )
-        Spacer(modifier = Modifier.height(12.dp))
-        Text(
-            text = "Start navigation in Google Maps or Waze",
-            color = CarColors.Text3,
-            fontSize = 13.sp,
-            textAlign = TextAlign.Center,
-            lineHeight = 18.sp,
-        )
-    }
-}
-
-// ── Active navigation content ─────────────────────────────────────────────────
-
-@Composable
-private fun NavContent(
-    maneuverDistance: String,
-    maneuverStreet: String,
-    maneuverIcon: Bitmap?,
-    eta: String,
-    timeRemaining: String,
-    distanceRemaining: String,
-    cancelIntent: PendingIntent?,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.SpaceBetween,
-    ) {
-        // ── Header row: icon/distance + cancel ───────────────────────────────
+        // ── Header — maneuver instruction ─────────────────────────────────────
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.Top,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            ManeuverSection(
-                icon     = maneuverIcon,
-                distance = maneuverDistance,
-                street   = maneuverStreet,
-                modifier = Modifier.weight(1f),
-            )
-
-            if (cancelIntent != null) {
-                CancelButton(cancelIntent = cancelIntent)
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // ── Trip summary bar ─────────────────────────────────────────────────
-        TripSummaryBar(
-            eta               = eta,
-            timeRemaining     = timeRemaining,
-            distanceRemaining = distanceRemaining,
-        )
-    }
-}
-
-// ── Maneuver section ──────────────────────────────────────────────────────────
-
-@Composable
-private fun ManeuverSection(
-    icon: Bitmap?,
-    distance: String,
-    street: String,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.Start,
-    ) {
-        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // Turn arrow icon
+            Icon(
+                imageVector = Icons.Default.Navigation,
+                contentDescription = null,
+                tint = CarColors.Accent,
+                modifier = Modifier.size(14.dp),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = street.uppercase(),
+                color = CarColors.Accent,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+
+        // ── Center — icon + distance + street ─────────────────────────────────
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            // Maneuver arrow icon
             if (icon != null) {
                 Image(
                     bitmap = remember(icon) { icon.asImageBitmap() },
-                    contentDescription = "Turn direction",
-                    modifier = Modifier
-                        .size(80.dp)
-                        .clip(RoundedCornerShape(12.dp)),
+                    contentDescription = "Maneuver",
+                    modifier = Modifier.size(140.dp),
                 )
             } else {
                 Icon(
                     imageVector = Icons.Default.Navigation,
-                    contentDescription = "Navigation",
-                    tint = NavGreen,
-                    modifier = Modifier.size(80.dp),
+                    contentDescription = "Maneuver",
+                    tint = Color.White,
+                    modifier = Modifier.size(120.dp),
                 )
             }
 
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                // Distance to maneuver — large bold green
-                if (distance.isNotEmpty()) {
-                    Text(
-                        text = distance,
-                        color = NavGreen,
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        maxLines = 1,
-                    )
-                }
+            Spacer(Modifier.height(20.dp))
 
-                // Street name — medium white
-                if (street.isNotEmpty()) {
-                    Text(
-                        text = street,
-                        color = CarColors.Text,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        lineHeight = 20.sp,
-                    )
-                }
+            // "za 600 m" — "za" smaller, distance larger
+            if (distance.isNotEmpty()) {
+                Text(
+                    text = buildAnnotatedString {
+                        withStyle(SpanStyle(fontSize = 28.sp, fontWeight = FontWeight.Medium, color = NavGreen)) {
+                            append("za ")
+                        }
+                        withStyle(SpanStyle(fontSize = 52.sp, fontWeight = FontWeight.ExtraBold, color = NavGreen)) {
+                            append(distance.trim())
+                        }
+                    },
+                    textAlign = TextAlign.Center,
+                )
             }
         }
+
+        // ── Bottom bar ────────────────────────────────────────────────────────
+        NavBottomBar(
+            speedKmh      = speedKmh,
+            distRemaining = distanceRemaining,
+            eta           = eta,
+            cancelIntent  = cancelIntent,
+        )
     }
 }
 
-// ── Cancel button ─────────────────────────────────────────────────────────────
+// ── Bottom status bar ─────────────────────────────────────────────────────────
 
 @Composable
-private fun CancelButton(cancelIntent: PendingIntent) {
-    Box(
-        modifier = Modifier
-            .size(36.dp)
-            .clip(CircleShape)
-            .background(NavRed),
-        contentAlignment = Alignment.Center,
-    ) {
-        IconButton(
-            onClick = {
-                try {
-                    cancelIntent.send()
-                } catch (_: PendingIntent.CanceledException) {
-                    // navigation already stopped on the system side
-                }
-            },
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            Icon(
-                imageVector = Icons.Default.Close,
-                contentDescription = "Stop navigation",
-                tint = Color.White,
-                modifier = Modifier.size(18.dp),
-            )
-        }
-    }
-}
-
-// ── Trip summary bar ──────────────────────────────────────────────────────────
-
-@Composable
-private fun TripSummaryBar(
+private fun NavBottomBar(
+    speedKmh: Float,
+    distRemaining: String,
     eta: String,
-    timeRemaining: String,
-    distanceRemaining: String,
+    cancelIntent: PendingIntent?,
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(CarColors.Surface2)
-            .padding(horizontal = 8.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
+            .background(BottomBg)
+            .padding(horizontal = 20.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        TripSummaryCell(label = "ETA",   value = eta,               emoji = "🕒")
-        BarDividerLine()
-        TripSummaryCell(label = "Zbývá", value = timeRemaining,     emoji = "⌛")
-        BarDividerLine()
-        TripSummaryCell(label = "Trasa", value = distanceRemaining, emoji = "🛣️")
+        // Speed + limit
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = buildAnnotatedString {
+                    withStyle(SpanStyle(fontSize = 26.sp, fontWeight = FontWeight.ExtraBold, color = CarColors.Text)) {
+                        append(speedKmh.toInt().toString())
+                    }
+                    withStyle(SpanStyle(fontSize = 12.sp, color = CarColors.Text3)) {
+                        append(" km/h")
+                    }
+                }
+            )
+            Spacer(Modifier.width(10.dp))
+            SpeedLimitBadge(limit = "50")
+        }
+
+        // Distance remaining
+        if (distRemaining.isNotEmpty()) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "Zbývá $distRemaining",
+                    color = CarColors.Text2,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+                Spacer(Modifier.height(4.dp))
+                // Progress indicator line (decorative — no total distance available)
+                Box(
+                    modifier = Modifier
+                        .width(80.dp)
+                        .height(3.dp)
+                        .clip(CircleShape)
+                        .background(CarColors.Surface3)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .width(32.dp)
+                            .height(3.dp)
+                            .clip(CircleShape)
+                            .background(NavGreen)
+                    )
+                }
+            }
+        }
+
+        // ETA
+        if (eta.isNotEmpty()) {
+            Text(
+                text = eta,
+                color = CarColors.Text2,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+
+        // Cancel / Ukončit
+        if (cancelIntent != null) {
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(CancelBg)
+                    .clickable {
+                        try { cancelIntent.send() }
+                        catch (_: PendingIntent.CanceledException) {}
+                    }
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Ukončit",
+                    tint = CarColors.Text2,
+                    modifier = Modifier.size(14.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = "Ukončit",
+                    color = CarColors.Text2,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+        }
     }
 }
 
-@Composable
-private fun TripSummaryCell(label: String, value: String, emoji: String) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        Text(
-            text = emoji,
-            fontSize = 14.sp,
-        )
-        Text(
-            text = value.ifEmpty { "–" },
-            color = CarColors.Text,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-        )
-        Text(
-            text = label,
-            color = LabelColor,
-            fontSize = 10.sp,
-            maxLines = 1,
-        )
-    }
-}
+// ── Speed limit roundel ───────────────────────────────────────────────────────
 
 @Composable
-private fun BarDividerLine() {
+private fun SpeedLimitBadge(limit: String) {
     Box(
         modifier = Modifier
-            .width(1.dp)
-            .height(36.dp)
-            .background(BarDivider)
-    )
+            .size(34.dp)
+            .clip(CircleShape)
+            .background(Color.White)
+            .border(3.dp, SpeedLimitRed, CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = limit,
+            color = Color.Black,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.ExtraBold,
+        )
+    }
 }

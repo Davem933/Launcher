@@ -61,9 +61,12 @@ private val NAV_APPS = listOf(
  * is running, otherwise shows the landing screen with app picker.
  */
 @Composable
-fun NavAreaWidget(modifier: Modifier = Modifier) {
+fun NavAreaWidget(
+    speedKmh: Float = 0f,
+    modifier: Modifier = Modifier,
+) {
     if (NavRepository.isActive) {
-        NavWidget(modifier = modifier)
+        NavWidget(speedKmh = speedKmh, modifier = modifier)
     } else {
         NavLanding(modifier = modifier)
     }
