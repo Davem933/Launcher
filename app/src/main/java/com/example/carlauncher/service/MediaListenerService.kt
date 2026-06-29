@@ -32,6 +32,12 @@ class MediaListenerService : NotificationListenerService() {
         private val NAV_PACKAGES = setOf(
             "com.google.android.apps.maps",
             "com.waze",
+            "cz.seznam.mapy",
+        )
+        // Apps whose icons are always the app logo, not a turn arrow
+        private val LOGO_ONLY_ICON_PACKAGES = setOf(
+            "com.waze",
+            "cz.seznam.mapy",
         )
         private val CANCEL_KEYWORDS = setOf(
             "stop", "exit", "cancel", "end", "dismiss", "quit", "close",
@@ -185,9 +191,9 @@ class MediaListenerService : NotificationListenerService() {
     // ── Icon extraction ───────────────────────────────────────────────────────
 
     private fun extractIcon(notification: Notification, pkg: String): Bitmap? {
-        // Waze icons (large and small) are always the app logo, not a turn arrow.
+        // Some apps (Waze, Mapy.cz) only send their app logo as icon, not a turn arrow.
         // Return null → NavWidget shows the default Navigation arrow instead.
-        if (pkg == "com.waze") return null
+        if (pkg in LOGO_ONLY_ICON_PACKAGES) return null
 
         try {
             val d = notification.getLargeIcon()?.loadDrawable(applicationContext)
