@@ -104,30 +104,61 @@ class MediaListenerService : NotificationListenerService() {
 
     // ── Parsing ───────────────────────────────────────────────────────────────
 
+    /**
+     * Content-based trip summary parsing — identifies each part by what it looks like,
+     * not by position. Google Maps Czech sends: "1 h 2 min · 62 km · Příjezd: 15:05"
+     * or just two parts. Order can vary between app versions.
+     */
     private fun parseTripSummary(summary: String): Triple<String, String, String> {
         if (summary.isBlank()) return Triple("", "", "")
-        val parts = summary.split('·').map { it.trim() }
-        return Triple(
-            parts.getOrElse(0) { "" },
-            parts.getOrElse(1) { "" },
-            parts.getOrElse(2) { "" },
-        )
+        val parts = summary.split('·').map { it.trim() }.filter { it.isNotEmpty() }
+        var arrival  = ""   // contains ":" → arrival time  e.g. "Příjezd: 15:05"
+        var timeLeft = ""   // contains "min" or "h "       e.g. "1 h 2 min"
+        var distLeft = ""   // contains "km" or ends in " m" e.g. "62 km"
+        for (part in parts) {
+            when {
+                arrival.isEmpty()  && part.contains(':') -> arrival  = part
+                timeLeft.isEmpty() && looksLikeDuration(part) -> timeLeft = part
+                distLeft.isEmpty() && looksLikeDistance(part) -> distLeft = part
+            }
+        }
+        // fallback: if only one part and nothing matched, treat as arrival
+        if (arrival.isEmpty() && timeLeft.isEmpty() && distLeft.isEmpty() && parts.isNotEmpty())
+            arrival = parts[0]
+        return Triple(arrival, timeLeft, distLeft)
     }
 
-    private fun extractStreetAndDistance(title: String, text: String): Pair<String, String> = when {
-        looksLikeDistance(text)  -> Pair(title, text)
-        looksLikeDistance(title) -> Pair(text, title)
-        else                     -> Pair(title, text)
+    /**
+     * Google Maps Czech: EXTRA_TITLE = "za 600 m" (with "za " prefix), EXTRA_TEXT = instruction.
+     * Strip the "za " prefix before storing — UI adds it back.
+     */
+    private fun extractStreetAndDistance(title: String, text: String): Pair<String, String> {
+        val titleT = title.trim()
+        val textT  = text.trim()
+        // Czech "za X m" / "za X km" pattern in title
+        val zaPrefix = Regex("^za\\s+", RegexOption.IGNORE_CASE)
+        if (zaPrefix.containsMatchIn(titleT)) {
+            val dist = zaPrefix.replace(titleT, "")
+            return Pair(textT, dist)    // street=text, distance=stripped title
+        }
+        return when {
+            looksLikeDistance(textT)  -> Pair(titleT, textT)
+            looksLikeDistance(titleT) -> Pair(textT, titleT)
+            else                      -> Pair(titleT, textT)
+        }
     }
 
     private fun looksLikeDistance(s: String): Boolean {
-        val t = s.trim()
-        if (t.isEmpty() || !t[0].isDigit()) return false
-        return t.contains("km", ignoreCase = true)
-            || t.contains(" m", ignoreCase = true)
-            || t.contains("mi", ignoreCase = true)
-            || t.contains("ft", ignoreCase = true)
+        if (s.isEmpty() || !s[0].isDigit()) return false
+        return s.contains("km", ignoreCase = true)
+            || s.contains(" m", ignoreCase = true)
+            || s.contains("mi", ignoreCase = true)
+            || s.contains("ft", ignoreCase = true)
     }
+
+    private fun looksLikeDuration(s: String): Boolean =
+        s.contains("min", ignoreCase = true) ||
+        (s.contains(" h ", ignoreCase = true) && !s.contains("km", ignoreCase = true))
 
     // ── Icon extraction ───────────────────────────────────────────────────────
 

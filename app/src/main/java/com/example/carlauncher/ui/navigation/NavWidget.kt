@@ -57,8 +57,13 @@ fun NavWidget(
     val street            = NavRepository.maneuverStreet
     val distance          = NavRepository.maneuverDistance
     val icon              = NavRepository.maneuverIcon
-    val eta               = NavRepository.eta
     val distanceRemaining = NavRepository.distanceRemaining
+    val timeRemaining     = NavRepository.timeRemaining
+    // Strip "Příjezd: " / "Arrival: " prefix — show only the time e.g. "15:05"
+    val arrivalTime       = NavRepository.eta
+        .removePrefix("Příjezd: ").removePrefix("Příjezd:")
+        .removePrefix("Arrival: ").removePrefix("Arrival:")
+        .trim()
     val cancelIntent      = NavRepository.cancelIntent
     val progressFraction  = NavRepository.progressFraction
 
@@ -137,10 +142,11 @@ fun NavWidget(
 
         // ── Bottom bar ────────────────────────────────────────────────────────
         NavBottomBar(
-            speedKmh        = speedKmh,
-            distRemaining   = distanceRemaining,
-            eta             = eta,
-            cancelIntent    = cancelIntent,
+            speedKmh         = speedKmh,
+            distRemaining    = distanceRemaining,
+            timeRemaining    = timeRemaining,
+            arrivalTime      = arrivalTime,
+            cancelIntent     = cancelIntent,
             progressFraction = progressFraction,
         )
     }
@@ -152,7 +158,8 @@ fun NavWidget(
 private fun NavBottomBar(
     speedKmh: Float,
     distRemaining: String,
-    eta: String,
+    timeRemaining: String,
+    arrivalTime: String,
     cancelIntent: PendingIntent?,
     progressFraction: Float,
 ) {
@@ -216,17 +223,28 @@ private fun NavBottomBar(
 
         Spacer(Modifier.width(16.dp))
 
-        // ── ETA ──────────────────────────────────────────────────────────────
-        if (eta.isNotEmpty()) {
-            Text(
-                text = eta,
-                color = CarColors.Text2,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.wrapContentWidth(),
-            )
-            Spacer(Modifier.width(12.dp))
+        // ── Čas zbývá + příjezd ──────────────────────────────────────────────
+        Column(
+            horizontalAlignment = Alignment.End,
+            modifier = Modifier.wrapContentWidth(),
+        ) {
+            if (timeRemaining.isNotEmpty()) {
+                Text(
+                    text = timeRemaining,
+                    color = CarColors.Text,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            if (arrivalTime.isNotEmpty()) {
+                Text(
+                    text = arrivalTime,
+                    color = CarColors.Text3,
+                    fontSize = 13.sp,
+                )
+            }
         }
+        Spacer(Modifier.width(12.dp))
 
         // ── Ukončit ───────────────────────────────────────────────────────────
         Row(
