@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -22,7 +21,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -35,10 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.carlauncher.ui.theme.CarColors
 import kotlin.math.roundToInt
 
@@ -68,7 +63,6 @@ private fun VolumeCard(modifier: Modifier = Modifier) {
 
     ControlCard(
         icon        = Icons.Filled.VolumeUp,
-        label       = "HLASITOST",
         level       = level,
         accentColor = VolumeColor,
         modifier    = modifier,
@@ -93,7 +87,6 @@ private fun BrightnessCard(modifier: Modifier = Modifier) {
 
     ControlCard(
         icon        = Icons.Filled.WbSunny,
-        label       = "JAS",
         level       = level,
         accentColor = BrightnessColor,
         modifier    = modifier,
@@ -111,7 +104,6 @@ private fun BrightnessCard(modifier: Modifier = Modifier) {
 @Composable
 private fun ControlCard(
     icon: ImageVector,
-    label: String,
     level: Float,
     accentColor: Color,
     onDelta: (Float) -> Unit,
@@ -137,32 +129,9 @@ private fun ControlCard(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 14.dp, vertical = 10.dp),
+                .padding(horizontal = 14.dp, vertical = 12.dp),
         ) {
-            // Label + procenta
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = label,
-                    color = accentColor,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.08.em,
-                )
-                Text(
-                    text = "${(level * 100).roundToInt()}%",
-                    color = CarColors.Text2,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                )
-            }
-
-            Spacer(Modifier.height(5.dp))
-
-            // Horizontální progress bar
+            // Horizontální progress bar — pohybuje se se swipem
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -179,7 +148,7 @@ private fun ControlCard(
                 )
             }
 
-            // Ikona uprostřed zbývajícího prostoru
+            // Ikona uprostřed
             Box(
                 modifier = Modifier
                     .weight(1f)
