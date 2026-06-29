@@ -54,17 +54,6 @@
             </intent-filter>
         </service>
 
-        <!-- Intercepts Google Maps / Waze turn-by-turn notifications to power NavWidget.
-             User must grant Notification access in Settings → Apps → Special app access. -->
-        <service
-            android:name=".service.NavNotificationListener"
-            android:label="Navigation Dashboard"
-            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.service.notification.NotificationListenerService" />
-            </intent-filter>
-        </service>
 
     </application>
 
