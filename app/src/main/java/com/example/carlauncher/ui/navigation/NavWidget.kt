@@ -160,7 +160,7 @@ private fun NavBottomBar(
         modifier = Modifier
             .fillMaxWidth()
             .background(BottomBg)
-            .padding(horizontal = 20.dp, vertical = 12.dp),
+            .padding(horizontal = 20.dp, vertical = 20.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // ── Speed + limit badge ───────────────────────────────────────────────
