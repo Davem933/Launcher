@@ -122,20 +122,36 @@ fun NavWidget(
                 )
             }
 
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(16.dp))
 
-            // "za 600 m" — "za" smaller, distance larger
-            if (distance.isNotEmpty()) {
+            // "za 600 m" — skryj pokud je 0 m (jsme přímo na místě)
+            val distNonZero = distance.trim().takeIf { it.isNotEmpty() && it != "0 m" && it != "0m" }
+            if (distNonZero != null) {
                 Text(
                     text = buildAnnotatedString {
-                        withStyle(SpanStyle(fontSize = 28.sp, fontWeight = FontWeight.Medium, color = NavGreen)) {
+                        withStyle(SpanStyle(fontSize = 26.sp, fontWeight = FontWeight.Medium, color = NavGreen)) {
                             append("za ")
                         }
-                        withStyle(SpanStyle(fontSize = 52.sp, fontWeight = FontWeight.ExtraBold, color = NavGreen)) {
-                            append(distance.trim())
+                        withStyle(SpanStyle(fontSize = 50.sp, fontWeight = FontWeight.ExtraBold, color = NavGreen)) {
+                            append(distNonZero)
                         }
                     },
                     textAlign = TextAlign.Center,
+                )
+                Spacer(Modifier.height(10.dp))
+            }
+
+            // Název ulice / instrukce — vždy viditelně pod vzdáleností
+            if (street.isNotEmpty()) {
+                Text(
+                    text = street,
+                    color = CarColors.Text,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 24.dp),
                 )
             }
         }

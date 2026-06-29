@@ -27,7 +27,9 @@ import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.VerticalDivider
+import android.util.Log
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,6 +56,8 @@ fun WeatherCalendarWidget(
 ) {
     val weather by viewModel.weather.collectAsStateWithLifecycle()
     val events  by viewModel.events.collectAsStateWithLifecycle()
+
+    SideEffect { Log.d("WeatherCalUI", "render: weather=$weather events=${events.size}") }
 
     Row(
         modifier = modifier
