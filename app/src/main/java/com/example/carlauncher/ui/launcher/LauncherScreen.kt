@@ -73,7 +73,6 @@ fun LauncherScreen(
             ) {
                 // Left — map ~65% width (SpeedDisplay + Navigovat overlays inside)
                 MapWidget(
-                    isDark = isDark,
                     modifier = Modifier
                         .weight(1.85f)
                         .fillMaxHeight(),

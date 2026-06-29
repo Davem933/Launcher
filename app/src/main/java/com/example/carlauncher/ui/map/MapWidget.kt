@@ -75,7 +75,6 @@ private class MapState {
 
 @Composable
 fun MapWidget(
-    isDark: Boolean = true,
     modifier: Modifier = Modifier,
     onNavigate: () -> Unit = {},
     viewModel: MapViewModel = hiltViewModel()
@@ -97,20 +96,12 @@ fun MapWidget(
     var mapAsyncReady by remember { mutableStateOf(false) }
     var isFollowing by remember { mutableStateOf(true) }
 
-    // Load Mapy.cz raster style as soon as MapLibre is ready.
-    // NOTE: Tile style is loaded once. MAPYCZ_BASIC is the only verified working URL;
-    // MAPYCZ_DARK exists in TileConfig but must be tested against the API before enabling.
-    // Calling setStyle() more than once (e.g. on isDark change) is not safe in MapLibre 11.5.x.
     LaunchedEffect(mapAsyncReady) {
         if (!mapAsyncReady) return@LaunchedEffect
         val map = mapState.map ?: return@LaunchedEffect
 
-        val styleBuilder = when (viewModel.tileSource) {
-            TileSource.MAPYCZ  -> Style.Builder().fromJson(buildMapyczStyleJson(TileConfig.MAPYCZ_BASIC, isDark))
-            TileSource.DEMO    -> Style.Builder().fromUri(TileConfig.DEMO)
-            TileSource.PMTILES -> Style.Builder().fromUri("asset://style/map_style_dark.json")
-        }
-        Log.d("MapWidget", "Loading style: ${viewModel.tileSource}")
+        val styleBuilder = Style.Builder().fromUri(TileConfig.STYLE_ASSET)
+        Log.d("MapWidget", "Loading style: ${TileConfig.STYLE_ASSET}")
         map.setStyle(styleBuilder) { style ->
             Log.d("MapWidget", "Style loaded OK, layers=${style.layers.size}")
 

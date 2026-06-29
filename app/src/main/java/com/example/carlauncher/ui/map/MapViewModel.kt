@@ -26,8 +26,6 @@ class MapViewModel @Inject constructor(
 
     val vehicleLocation: StateFlow<VehicleDisplayLocation?> = repository.vehicleLocation
 
-    val tileSource: TileSource = TileConfig.ACTIVE
-
     private val _nearbyPois = MutableStateFlow<List<Poi>>(emptyList())
     val nearbyPois: StateFlow<List<Poi>> = _nearbyPois.asStateFlow()
 
@@ -42,19 +40,16 @@ class MapViewModel @Inject constructor(
     private val poiUseCase = PoiUseCase()
 
     init {
-        if (tileSource == TileSource.PMTILES) {
-            val filePath = TileConfig.PMTILES.removePrefix("pmtiles://")
-            val file = File(filePath)
-            if (file.exists()) {
-                try {
-                    pmtilesServer = PmtilesHttpServer(file).also { it.start() }
-                    Log.d("MapViewModel", "PMTiles server started on :8888, file=$filePath")
-                } catch (e: Exception) {
-                    Log.e("MapViewModel", "PMTiles server failed to start: ${e.message}")
-                }
-            } else {
-                Log.w("MapViewModel", "PMTiles file not found: $filePath")
+        val file = File(TileConfig.PMTILES_PATH)
+        if (file.exists()) {
+            try {
+                pmtilesServer = PmtilesHttpServer(file).also { it.start() }
+                Log.d("MapViewModel", "PMTiles server started, file=${TileConfig.PMTILES_PATH}")
+            } catch (e: Exception) {
+                Log.e("MapViewModel", "PMTiles server failed: ${e.message}")
             }
+        } else {
+            Log.w("MapViewModel", "PMTiles file not found: ${TileConfig.PMTILES_PATH}")
         }
 
         viewModelScope.launch {
@@ -63,7 +58,6 @@ class MapViewModel @Inject constructor(
                 if (poiUseCase.shouldFetch(fix.lat, fix.lng)) {
                     poiUseCase.recordQuery(fix.lat, fix.lng)
                     val lat = fix.lat; val lng = fix.lng
-                    Log.d("MapViewModel", "POI fetch triggered at $lat,$lng")
                     viewModelScope.launch(Dispatchers.IO) {
                         val pois = poiRepository.fetchPois(lat, lng)
                         Log.d("MapViewModel", "POI fetch done: ${pois.size} POIs")
