@@ -160,7 +160,7 @@ private fun NavBottomBar(
         modifier = Modifier
             .fillMaxWidth()
             .background(BottomBg)
-            .padding(horizontal = 20.dp, vertical = 20.dp),
+            .padding(horizontal = 24.dp, vertical = 28.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // ── Speed + limit badge ───────────────────────────────────────────────
@@ -170,10 +170,10 @@ private fun NavBottomBar(
         ) {
             Text(
                 text = buildAnnotatedString {
-                    withStyle(SpanStyle(fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = CarColors.Text)) {
+                    withStyle(SpanStyle(fontSize = 34.sp, fontWeight = FontWeight.ExtraBold, color = CarColors.Text)) {
                         append(speedKmh.toInt().toString())
                     }
-                    withStyle(SpanStyle(fontSize = 11.sp, color = CarColors.Text3)) {
+                    withStyle(SpanStyle(fontSize = 13.sp, color = CarColors.Text3)) {
                         append(" km/h")
                     }
                 }
@@ -192,7 +192,7 @@ private fun NavBottomBar(
             Text(
                 text = if (distRemaining.isNotEmpty()) "Zbývá $distRemaining" else "",
                 color = CarColors.Text2,
-                fontSize = 13.sp,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.Medium,
             )
             Spacer(Modifier.height(5.dp))
@@ -221,7 +221,7 @@ private fun NavBottomBar(
             Text(
                 text = eta,
                 color = CarColors.Text2,
-                fontSize = 16.sp,
+                fontSize = 20.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.wrapContentWidth(),
             )
@@ -252,7 +252,7 @@ private fun NavBottomBar(
             Text(
                 text = "Ukončit",
                 color = CarColors.Text2,
-                fontSize = 13.sp,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.Medium,
             )
         }
@@ -265,7 +265,7 @@ private fun NavBottomBar(
 private fun SpeedLimitBadge(limit: String) {
     Box(
         modifier = Modifier
-            .size(34.dp)
+            .size(42.dp)
             .clip(CircleShape)
             .background(Color.White)
             .border(3.dp, SpeedLimitRed, CircleShape),
@@ -274,7 +274,7 @@ private fun SpeedLimitBadge(limit: String) {
         Text(
             text = limit,
             color = Color.Black,
-            fontSize = 11.sp,
+            fontSize = 13.sp,
             fontWeight = FontWeight.ExtraBold,
         )
     }
