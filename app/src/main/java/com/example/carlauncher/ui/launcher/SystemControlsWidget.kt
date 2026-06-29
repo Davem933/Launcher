@@ -30,8 +30,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -133,15 +133,13 @@ private fun ControlCard(
                 )
             },
     ) {
-        // Horizontální čára — její Y pozice = (1 - level) * výška karty
+        // Barevná výplň stoupá od spodku podle úrovně
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val y = size.height * (1f - level)
-            drawLine(
-                color       = accentColor,
-                start       = Offset(0f, y),
-                end         = Offset(size.width, y),
-                strokeWidth = 2.dp.toPx(),
-                cap         = StrokeCap.Round,
+            val fillH = size.height * level
+            drawRect(
+                color    = accentColor.copy(alpha = 0.18f),
+                topLeft  = Offset(0f, size.height - fillH),
+                size     = Size(size.width, fillH),
             )
         }
 
