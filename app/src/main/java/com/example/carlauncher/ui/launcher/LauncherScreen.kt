@@ -29,7 +29,7 @@ import com.example.carlauncher.debug.DebugPanel
 import com.example.carlauncher.debug.GpsDebugOverlay
 import com.example.carlauncher.ui.dock.DockBar
 import com.example.carlauncher.ui.dock.DockViewModel
-import com.example.carlauncher.ui.map.MapWidget
+import com.example.carlauncher.ui.navigation.NavAreaWidget
 import com.example.carlauncher.ui.music.MusicWidget
 import com.example.carlauncher.ui.theme.CarColors
 
@@ -71,12 +71,11 @@ fun LauncherScreen(
                     .padding(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Left — map ~65% width (SpeedDisplay + Navigovat overlays inside)
-                MapWidget(
+                // Left — nav area ~65% width
+                NavAreaWidget(
                     modifier = Modifier
                         .weight(1.85f)
-                        .fillMaxHeight(),
-                    onNavigate = { dockViewModel.launchNavigation() }
+                        .fillMaxHeight()
                 )
 
                 // Right — ~35% width: music on top, quick destinations below
