@@ -67,6 +67,13 @@ class MediaListenerService : NotificationListenerService() {
         val subText  = extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString()  ?: ""
         val infoText = extras.getCharSequence(Notification.EXTRA_INFO_TEXT)?.toString() ?: ""
 
+        // ── RAW extras dump — helps detect what each nav app actually sends ──────
+        Log.d("NavRaw", "=== pkg=${sbn.packageName} ===")
+        Log.d("NavRaw", "TITLE   ='$title'")
+        Log.d("NavRaw", "TEXT    ='$text'")
+        Log.d("NavRaw", "SUBTEXT ='$subText'")
+        Log.d("NavRaw", "INFOTEXT='$infoText'")
+
         val (street, distance) = extractStreetAndDistance(title, text)
         val (eta, timeLeft, distLeft) = parseTripSummary(
             when {
@@ -80,7 +87,7 @@ class MediaListenerService : NotificationListenerService() {
         val icon         = extractIcon(notification, sbn.packageName)
         val cancelIntent = findCancelIntent(notification)
 
-        Log.d("NavListener", "pkg=${sbn.packageName} street=$street dist=$distance eta=$eta")
+        Log.d("NavListener", "→ street='$street' dist='$distance' eta='$eta' timeLeft='$timeLeft' distLeft='$distLeft'")
 
         mainHandler.post {
             NavRepository.updateNavigation(
@@ -133,8 +140,9 @@ class MediaListenerService : NotificationListenerService() {
      * Strip the "za " prefix before storing — UI adds it back.
      */
     private fun extractStreetAndDistance(title: String, text: String): Pair<String, String> {
-        val titleT = title.trim()
-        val textT  = text.trim()
+        // Normalize non-breaking spaces before any pattern matching
+        val titleT = title.trim().replace(' ', ' ')
+        val textT  = text.trim().replace(' ', ' ')
         // Czech "za X m" / "za X km" pattern in title
         val zaPrefix = Regex("^za\\s+", RegexOption.IGNORE_CASE)
         if (zaPrefix.containsMatchIn(titleT)) {
@@ -150,10 +158,12 @@ class MediaListenerService : NotificationListenerService() {
 
     private fun looksLikeDistance(s: String): Boolean {
         if (s.isEmpty() || !s[0].isDigit()) return false
-        return s.contains("km", ignoreCase = true)
-            || s.contains(" m", ignoreCase = true)
-            || s.contains("mi", ignoreCase = true)
-            || s.contains("ft", ignoreCase = true)
+        // Normalize non-breaking space ( ) used by Google Maps e.g. "200 m"
+        val n = s.replace(' ', ' ')
+        return n.contains("km", ignoreCase = true)
+            || n.contains(" m", ignoreCase = true)
+            || n.contains("mi", ignoreCase = true)
+            || n.contains("ft", ignoreCase = true)
     }
 
     private fun looksLikeDuration(s: String): Boolean =
