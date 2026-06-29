@@ -37,7 +37,6 @@ class MediaListenerService : NotificationListenerService() {
         // Apps whose icons are always the app logo, not a turn arrow
         private val LOGO_ONLY_ICON_PACKAGES = setOf(
             "com.waze",
-            "cz.seznam.mapy",
         )
         private val CANCEL_KEYWORDS = setOf(
             "stop", "exit", "cancel", "end", "dismiss", "quit", "close",
