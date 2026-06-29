@@ -140,9 +140,9 @@ class MediaListenerService : NotificationListenerService() {
      * Strip the "za " prefix before storing — UI adds it back.
      */
     private fun extractStreetAndDistance(title: String, text: String): Pair<String, String> {
-        // Normalize non-breaking spaces before any pattern matching
-        val titleT = title.trim().replace(' ', ' ')
-        val textT  = text.trim().replace(' ', ' ')
+        // Normalize non-breaking spaces ( ) before any pattern matching
+        val titleT = title.trim().replace(' ', ' ')
+        val textT  = text.trim().replace(' ', ' ')
         // Czech "za X m" / "za X km" pattern in title
         val zaPrefix = Regex("^za\\s+", RegexOption.IGNORE_CASE)
         if (zaPrefix.containsMatchIn(titleT)) {
@@ -152,7 +152,7 @@ class MediaListenerService : NotificationListenerService() {
         return when {
             looksLikeDistance(textT)  -> Pair(titleT, textT)
             looksLikeDistance(titleT) -> Pair(textT, titleT)
-            else                      -> Pair(titleT, textT)
+            else                      -> Pair(titleT, "")   // neither is a distance — no distance field
         }
     }
 

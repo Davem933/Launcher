@@ -125,7 +125,8 @@ fun NavWidget(
             Spacer(Modifier.height(16.dp))
 
             // "za 600 m" — skryj pokud je 0 m (jsme přímo na místě)
-            val distNonZero = distance.trim().takeIf { it.isNotEmpty() && it != "0 m" && it != "0m" }
+            val distNonZero = distance.trim().replace(' ', ' ')
+                .takeIf { it.isNotEmpty() && it != "0 m" && it != "0m" && it != "0" }
             if (distNonZero != null) {
                 Text(
                     text = buildAnnotatedString {
