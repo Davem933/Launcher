@@ -143,16 +143,20 @@ class MediaListenerService : NotificationListenerService() {
         // Normalize non-breaking spaces ( ) before any pattern matching
         val titleT = title.trim().replace(' ', ' ')
         val textT  = text.trim().replace(' ', ' ')
-        // Czech "za X m" / "za X km" pattern in title
+        // "za X m" / "za X km" pattern — Google Maps sends it in title, Waze in text
         val zaPrefix = Regex("^za\\s+", RegexOption.IGNORE_CASE)
         if (zaPrefix.containsMatchIn(titleT)) {
-            val dist = zaPrefix.replace(titleT, "")
-            return Pair(textT, dist)    // street=text, distance=stripped title
+            // Google Maps: title="za 200 m", text="směr Klenovecká"
+            return Pair(textT, zaPrefix.replace(titleT, ""))
+        }
+        if (zaPrefix.containsMatchIn(textT)) {
+            // Waze: title="Odbočte vpravo", text="za 200 m"
+            return Pair(titleT, zaPrefix.replace(textT, ""))
         }
         return when {
             looksLikeDistance(textT)  -> Pair(titleT, textT)
             looksLikeDistance(titleT) -> Pair(textT, titleT)
-            else                      -> Pair(titleT, "")   // neither is a distance — no distance field
+            else                      -> Pair(titleT, "")   // neither is a distance
         }
     }
 
@@ -173,11 +177,15 @@ class MediaListenerService : NotificationListenerService() {
     // ── Icon extraction ───────────────────────────────────────────────────────
 
     private fun extractIcon(notification: Notification, pkg: String): Bitmap? {
-        try {
-            val d = notification.getLargeIcon()?.loadDrawable(applicationContext)
-            if (d != null) return drawableToBitmap(d)
-        } catch (e: Exception) {
-            Log.w("NavListener", "getLargeIcon failed: ${e.message}")
+        // Waze large icon is always its app logo, not a turn arrow — skip it,
+        // NavWidget will fall back to the default Navigation arrow icon.
+        if (pkg != "com.waze") {
+            try {
+                val d = notification.getLargeIcon()?.loadDrawable(applicationContext)
+                if (d != null) return drawableToBitmap(d)
+            } catch (e: Exception) {
+                Log.w("NavListener", "getLargeIcon failed: ${e.message}")
+            }
         }
         try {
             val resId  = notification.smallIcon?.resId ?: return null
