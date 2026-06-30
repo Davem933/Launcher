@@ -4,12 +4,13 @@ import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -39,8 +40,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.carlauncher.data.model.DockSlot
 import com.example.carlauncher.ui.theme.CarColors
@@ -50,7 +53,6 @@ private val SlotBg        = Color(0xFF1A1A28)
 private val SlotBorder    = Color(0xFF2A2A38)
 private val SlotShape     = RoundedCornerShape(14.dp)
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun DockBar(
     modifier: Modifier = Modifier,
@@ -144,7 +146,6 @@ private fun MenuTile(onClick: () -> Unit) {
 
 // ── Configurable slot tile ────────────────────────────────────────────────────
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DockSlotTile(
     slot: DockSlot,
@@ -167,7 +168,20 @@ private fun DockSlotTile(
         modifier = Modifier
             .size(64.dp)
             .graphicsLayer { rotationZ = wiggle.value }
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    val up = withTimeoutOrNull(1500L) { waitForUpOrCancellation() }
+                    if (up == null) {
+                        // Prst stále dole po 1.5s → long press
+                        onLongClick()
+                        waitForUpOrCancellation()
+                    } else {
+                        // Krátký tap
+                        onClick()
+                    }
+                }
+            },
         contentAlignment = Alignment.Center
     ) {
         when (slot) {
