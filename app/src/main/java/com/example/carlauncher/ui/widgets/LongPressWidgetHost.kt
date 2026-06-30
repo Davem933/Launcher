@@ -4,9 +4,9 @@ import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetHostView
 import android.appwidget.AppWidgetProviderInfo
 import android.content.Context
-import android.view.GestureDetector
+import android.os.Handler
+import android.os.Looper
 import android.view.MotionEvent
-import androidx.core.view.GestureDetectorCompat
 
 class LongPressWidgetHost(context: Context, hostId: Int) : AppWidgetHost(context, hostId) {
     override fun onCreateView(
@@ -20,34 +20,45 @@ class LongPressWidgetHostView(context: Context) : AppWidgetHostView(context) {
 
     var onLongPress: (() -> Unit)? = null
 
-    // Set to true once long press fires; cleared on ACTION_UP/CANCEL.
-    // While true, we replace ACTION_UP with ACTION_CANCEL for children so
-    // the widget doesn't interpret finger-lift as a click and launch its app.
     private var longPressConsumed = false
+    private var downX = 0f
+    private var downY = 0f
+    private val slop by lazy {
+        val d = resources.displayMetrics.density
+        (12 * d) * (12 * d)   // 12dp pohyb = zrušení long-pressu
+    }
 
-    private val gestureDetector = GestureDetectorCompat(
-        context,
-        object : GestureDetector.SimpleOnGestureListener() {
-            override fun onLongPress(e: MotionEvent) {
-                longPressConsumed = true
-                onLongPress?.invoke()
+    private val handler = Handler(Looper.getMainLooper())
+    private val longPressRunnable = Runnable {
+        longPressConsumed = true
+        onLongPress?.invoke()
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                downX = ev.x
+                downY = ev.y
+                longPressConsumed = false
+                handler.postDelayed(longPressRunnable, 1500L)
+            }
+            MotionEvent.ACTION_MOVE -> {
+                val dx = ev.x - downX
+                val dy = ev.y - downY
+                if (dx * dx + dy * dy > slop) {
+                    handler.removeCallbacks(longPressRunnable)
+                }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                handler.removeCallbacks(longPressRunnable)
             }
         }
-    )
-
-    // dispatchTouchEvent is called for EVERY event regardless of
-    // requestDisallowInterceptTouchEvent — unlike onInterceptTouchEvent,
-    // which stops receiving ACTION_MOVE once a child widget calls
-    // requestDisallowInterceptTouchEvent(true) during its own gesture.
-    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-        gestureDetector.onTouchEvent(ev)
 
         if (longPressConsumed) {
-            val action = ev.action
-            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+            if (ev.actionMasked == MotionEvent.ACTION_UP ||
+                ev.actionMasked == MotionEvent.ACTION_CANCEL) {
                 longPressConsumed = false
             }
-            // Replace the event with ACTION_CANCEL so children don't fire a click.
             val cancel = MotionEvent.obtain(ev).also { it.action = MotionEvent.ACTION_CANCEL }
             val result = super.dispatchTouchEvent(cancel)
             cancel.recycle()
