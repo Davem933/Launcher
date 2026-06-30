@@ -43,7 +43,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.carlauncher.data.model.DockSlot
 import com.example.carlauncher.ui.theme.CarColors
@@ -171,14 +172,16 @@ private fun DockSlotTile(
             .pointerInput(Unit) {
                 awaitEachGesture {
                     awaitFirstDown(requireUnconsumed = false)
-                    val up = withTimeoutOrNull(1500L) { waitForUpOrCancellation() }
-                    if (up == null) {
-                        // Prst stále dole po 1.5s → long press
+                    try {
+                        withTimeout(1500L) {
+                            val up = waitForUpOrCancellation()
+                            if (up != null) onClick()   // prst zvednut před timeoutem → tap
+                            // up == null → gesto zrušeno jiným handlerem → nic
+                        }
+                    } catch (_: TimeoutCancellationException) {
+                        // Prst stále dole po 1.5s → skutečný long press
                         onLongClick()
                         waitForUpOrCancellation()
-                    } else {
-                        // Krátký tap
-                        onClick()
                     }
                 }
             },
