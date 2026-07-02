@@ -1,6 +1,6 @@
 # CarLauncher
 
-> A personal Android car launcher for **Lenovo Tab M10 Plus (3rd Gen)** mounted in a car dashboard. Replaces the default Android home screen with a fullscreen, landscape-only interface built for driving — no distractions, no clutter.
+> A personal Android car launcher for mounted in a car dashboard. Replaces the default Android home screen with a fullscreen, landscape-only interface built for driving — no distractions, no clutter.
 
 ---
 
