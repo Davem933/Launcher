@@ -19,7 +19,6 @@ Personal Android Car Launcher for Lenovo Tab M10 Plus (3rd Gen). Landscape-locke
 ./gradlew installDebug                   # build + install (needs USB/WiFi ADB)
 ./gradlew lint
 ./gradlew test
-./gradlew test --tests "com.example.carlauncher.SomeTest"
 ```
 
 Direct ADB install (PowerShell):
@@ -28,10 +27,7 @@ $adb = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
 & $adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-ADB logcat (PowerShell):
-```powershell
-& $adb logcat -s MediaDebug,PackageCheck,MapWidget,DockViewModel -d
-```
+ADB logcat tags: `NavRaw`, `NavListener`, `MediaDebug`, `SpeedLimit`, `MapWidget`, `DockViewModel`
 
 ## Architecture
 
@@ -39,184 +35,198 @@ Single-module app (`app/`). Package structure:
 
 ```
 ui/
-  launcher/     LauncherScreen (root layout), LauncherViewModel, StatusBar, QuickDestWidget
-  theme/        CarLauncherTheme (dark only), CarColors (design tokens)
+  launcher/     LauncherScreen, LauncherViewModel, StatusBar
+                WeatherCalendarWidget + ViewModel (počasí + kalendář)
+                SystemControlsWidget (hlasitost + jas)
+  navigation/   NavAreaWidget (podmíněný wrapper), NavWidget (turn-by-turn)
   map/          MapWidget, MapViewModel, MapStyleHelper, TileConfig
-  speed/        SpeedDisplay composable
+  speed/        SpeedDisplay
   music/        MusicWidget, MediaViewModel
   dock/         DockBar, DockViewModel, SlotPicker
+  widgets/      WidgetScreen, WidgetViewModel, LongPressWidgetHost, WidgetLayoutTemplate
+  theme/        CarLauncherTheme (dark only), CarColors
 data/
   location/     LocationRepository, LocationProcessor, KalmanFilter
+  navigation/   NavRepository (Compose singleton object)
+  speedlimit/   SpeedLimitRepository (Nominatim reverse geocoding)
+  weather/      WeatherRepository (Open-Meteo API)
+  calendar/     CalendarRepository (CalendarContract.Instances)
   media/        MediaSessionObserver
-  dock/         DockDataStoreExt (preferencesDataStore extension)
-  model/        VehicleDisplayLocation, TrackInfo, DockItem, DockSlot
+  dock/         DockDataStoreExt
+  widgets/      WidgetDataStoreExt
+  model/        VehicleDisplayLocation, DockItem, DockSlot, WidgetSlot, Poi
+  map/          PmtilesHttpServer (offline, nepoužíváno)
 di/
   LocationModule.kt
 service/
-  LocationForegroundService  (stub — not yet implemented)
-  MediaListenerService       (NotificationListenerService stub)
+  MediaListenerService   (NotificationListenerService — media + nav notifikace)
+  LocationForegroundService  (stub)
 ```
 
-**DI:** Hilt throughout. `@HiltAndroidApp` on `CarLauncherApp`, `@AndroidEntryPoint` on `MainActivity`. ViewModels use `@HiltViewModel`. Hilt modules in `di/` only provide types without `@Inject constructor` (e.g. `FusedLocationProviderClient`). Singletons with `@Inject constructor` get `@Singleton` on the class directly.
+**DI:** Hilt throughout. `@HiltAndroidApp` na `CarLauncherApp`, `@AndroidEntryPoint` na `MainActivity`. ViewModels přes `@HiltViewModel`. Hilt moduly v `di/` jen pro typy bez `@Inject constructor`. Singletony s `@Inject constructor` mají `@Singleton` přímo na třídě.
 
-**Theme:** `ui/theme/Theme.kt` defines `CarColorScheme` (dark only). Key tokens: background `#0D0D0F`, surface `#1A1A1F`, accent green `#22C55E` (unified across all widgets per design spec). Hardcoded hex is acceptable in existing widgets; new composables should prefer theme tokens.
+**Theme:** `CarColors.kt` — `Bg #0D0E12`, `Surface #161820`, `Go #5DBF7A`, `Accent #6B8EF0`, `Text/Text2/Text3`. Nové composables používají CarColors tokeny; starší widgety mají private color constants.
 
-**Fullscreen:** `MainActivity` hides status + nav bars via `WindowInsetsControllerCompat` and sets `FLAG_KEEP_SCREEN_ON`. Do not call `enableEdgeToEdge()` — it conflicts. `screenOrientation="landscape"` and `windowSoftInputMode="adjustNothing"` are intentional.
+**Fullscreen:** `MainActivity` skryje status + nav bary přes `WindowInsetsControllerCompat`, nastaví `FLAG_KEEP_SCREEN_ON`. Nevolat `enableEdgeToEdge()` — konflikt. `screenOrientation="landscape"` a `windowSoftInputMode="adjustNothing"` jsou záměrné.
 
-## LauncherScreen Layout (Modul 7 — final)
+## Dual-screen layout (HorizontalPager)
 
-`LauncherScreen` is a `Column` with three fixed bands:
+`MainActivity` má `HorizontalPager` se dvěma stranami (dot indikátor nad DockBar):
+- **Page 0** — `LauncherScreen` (mapa + hudba + navigace + počasí)
+- **Page 1** — `WidgetScreen` (Android AppWidget grid)
+
+Přechod swipe doleva/doprava. `beyondViewportPageCount = 1` → obě stránky jsou preloadnuty.
+
+## LauncherScreen Layout
 
 ```
 Column(fillMaxSize, bg = CarColors.Bg) {
-    StatusBar(44dp)                       ← time HH:mm 28sp + Czech date | battery, WiFi, GPS dot
+    StatusBar(44dp)                        ← čas HH:mm + české datum | baterie, WiFi, GPS tečka
     Box(weight 1f) {
         Row(p = 12/8dp, spacing 12dp) {
-            MapWidget(weight 1.85f)       ← ~65% width, SpeedDisplay + Navigovat overlays inside
-            Column(weight 1f) {           ← ~35% width
+            NavAreaWidget(weight 1.85f)    ← ~65% šířka: NavLanding nebo NavWidget
+            Column(weight 1f) {            ← ~35% šířka
                 MusicWidget(weight 1f)
-                QuickDestWidget()         ← wraps content, no fixed height
+                SystemControlsWidget()     ← hlasitost (modrá) + jas (jantarová), swipe nahoru/dolů
+                WeatherCalendarWidget()    ← počasí vlevo, kalendář vpravo
             }
         }
-        [GPS debug overlay, TopStart]     ← BuildConfig.DEBUG only
+        [GPS debug overlay, TopStart]      ← jen BuildConfig.DEBUG
     }
     DockBar(88dp, ph = 12dp, pb = 8dp)
 }
 ```
 
-`onLaunchSplitScreen` lambda is passed from `MainActivity` → `LauncherScreen` → `DockBar` (split screen must launch from Activity context).
+`SpeedDisplay` je uvnitř `MapWidget` v `BottomStart` s `padding(18dp)`.
 
-SpeedDisplay is rendered **inside** `MapWidget` at `BottomStart` with `padding(18dp)` — the dock no longer overlays the map.
+## Module: Navigation
 
-**Design tokens:** `ui/theme/CarColors.kt` — object with the final mockup palette (`Bg #0D0E12`, `Surface #161820`, `Go #5DBF7A`, `Accent #6B8EF0`, `Text/Text2/Text3`, …). New composables (StatusBar, QuickDestWidget) use these; older widgets still use private color constants.
+**NavAreaWidget** (ui/navigation/) — zobrazí `NavWidget` pokud `NavRepository.isActive`, jinak `NavLanding` (picker navigačních appek).
 
-**StatusBar:** updates time + battery every 30s via `LaunchedEffect` loop. Czech date via `DateTimeFormatter.ofPattern("EEEE d. MMMM", Locale("cs","CZ"))`. GPS dot green = fix (location != null), red = no signal.
+**NavRepository** (`data/navigation/NavRepository.kt`) — `object` s Compose `mutableStateOf` poli. Mutace musí přijít na main thread (MediaListenerService dispatchuje přes `mainHandler.post`). `isActive = maneuverStreet.isNotEmpty() || maneuverDistance.isNotEmpty()`.
+
+**MediaListenerService** (`service/`) — `NotificationListenerService` s dvojí rolí:
+1. Media session tracking (`isConnected` StateFlow pro `MediaSessionObserver`)
+2. Parsování nav notifikací → `NavRepository`
+
+**Nav formáty notifikací:**
+- Google Maps CZ: `TITLE="za 600 m"`, `TEXT="směr Klenovecká"` — "za " prefix v title
+- Waze: `TITLE="Odbočte vpravo"`, `TEXT="za 200 m"` — "za " prefix v textu
+- Mapy.cz: `TITLE="150 m"`, `TEXT="Klenovecká"`, `SUBTEXT="19:18 příjezd • 6 min • 2,8 km"`
+
+`LOGO_ONLY_ICON_PACKAGES = setOf("com.waze")` — tyto apps posílají jen logo jako ikonu, vrací se `null` → NavWidget zobrazí výchozí navigační šipku.
+
+Idle notifikace jsou přeskočeny: `hasNavContent = distance.isNotEmpty() || distLeft.isNotEmpty() || cancelIntent != null`.
+
+`parseTripSummary` splituje na `·` (U+00B7, Google Maps) i `•` (U+2022, Mapy.cz).
 
 ## Module: Map (MapWidget.kt)
 
-**Tile source:** Mapy.cz online raster tiles. URL template is in `TileConfig.MAPYCZ_BASIC`. The API key lives in `local.properties` (`MAPYCZ_API_KEY=...`, gitignored) and reaches code via `BuildConfig.MAPYCZ_API_KEY` — never hardcode, display, or log the key value.
+**Tile source:** Mapy.cz online raster tiles. API klíč v `local.properties` (`MAPYCZ_API_KEY=...`, gitignored) → `BuildConfig.MAPYCZ_API_KEY` — nikdy hardcodovat, zobrazovat ani logovat hodnotu klíče.
 
-**Style JSON** is built by `buildMapyczStyleJson(tileUrl)` in `MapStyleHelper.kt` — a raster source + single raster layer. No vector layers.
+**Style JSON** builduje `buildMapyczStyleJson(tileUrl)` v `MapStyleHelper.kt` — raster source + raster layer.
 
-**Rounded corners:** the MapWidget Box is clipped to `RoundedCornerShape(24.dp)` with a 1dp border. This requires `MapLibreMapOptions.textureMode(true)` — the default SurfaceView is composited separately and ignores Compose `clip()`.
+**Rounded corners** vyžaduje `MapLibreMapOptions.textureMode(true)` — výchozí SurfaceView ignoruje Compose `clip()`.
 
-**Initialization:**
-1. `MapView` created in `remember { MapView(context, options.textureMode(true)).also { it.onCreate(null) } }`
-2. `getMapAsync` sets `mapAsyncReady = true`
-3. `LaunchedEffect(mapAsyncReady)` loads the Mapy.cz style, adds `GeoJsonSource` + `SymbolLayer` for the vehicle marker
+**Inicializace:** `MapView` v `remember {}` → `getMapAsync` → `LaunchedEffect(mapAsyncReady)` načte styl, přidá `GeoJsonSource` + `SymbolLayer` pro marker.
 
-**Vehicle marker:** canvas-drawn 128px bitmap (halo + green disc + white direction wedge) created by `createVehicleMarkerBitmap()` inside MapWidget.kt. Bearing rotation via `iconRotate` on the SymbolLayer with `iconRotationAlignment("map")` — updated in `LaunchedEffect(location)`.
+**Marker:** canvas-drawn 128px bitmap (halo + zelený disk + bílý klín). Rotace přes `iconRotate` + `iconRotationAlignment("map")`.
 
-**Camera + marker updates:** `LaunchedEffect(location)` — single `animateCamera(CameraPosition.Builder().target().bearing(), 300ms)`. Never use two sequential `animateCamera()` calls — they cancel each other.
+**Kamera + marker:** `LaunchedEffect(location)` — jeden `animateCamera(CameraPosition.Builder().target().bearing(), 300ms)`. Nikdy dva sekvenční `animateCamera()` — ruší se navzájem.
 
-**MapLibre objects in Compose:** `MapLibreMap` and `GeoJsonSource` are stored in a plain `MapState` class inside `remember {}` — **never** in `mutableStateOf` (not snapshot-safe).
+**MapLibre objekty v Compose:** `MapLibreMap` a `GeoJsonSource` v plain `MapState` v `remember {}` — **nikdy** v `mutableStateOf`.
 
-**MapLibre API quirks (11.5.x):**
-- `addOnDidFailLoadingMapListener` is on `MapView`, takes `String`. `addOnMapLoadErrorListener` does not exist.
-- `addOnCameraChangeListener` does not exist on `MapLibreMap`.
-- Style JSON built with `buildString { append() }` to avoid trailing comma parse errors.
-- `{fontstack}` / `{range}` inside Kotlin `${}` string templates are misread. Use `buildString`.
-- `MapView.onStart()` / `onResume()` must be replayed manually in `DisposableEffect` — lifecycle may already be RESUMED when the composable first composes.
-
-**PmtilesHttpServer** (`data/map/`) — full PMTiles v3 reader + NanoHTTPD. Present in codebase but **not used by MapWidget** (switched to Mapy.cz). Kept for future offline tile support. Endpoints: `GET /tilejson`, `GET /tile/{z}/{x}/{y}`.
+**MapLibre API quirks (11.5.x):** `addOnDidFailLoadingMapListener` je na `MapView`. `addOnMapLoadErrorListener` neexistuje. `addOnCameraChangeListener` neexistuje na `MapLibreMap`. Style JSON přes `buildString { append() }` (avoid trailing comma). `{fontstack}`/`{range}` v Kotlin `${}` templates jsou špatně parsed — použít `buildString`. `MapView.onStart()`/`onResume()` replay v `DisposableEffect`.
 
 ## Module: SpeedDisplay (ui/speed/SpeedDisplay.kt)
 
-Stateless composable: `SpeedDisplay(speedKmh: Float, modifier)`. Receives speed from `MapViewModel.vehicleLocation` via the `location` state already collected in `MapWidget`.
+`SpeedDisplay(speedKmh: Float, speedLimitKmh: Int = 50, modifier)` — zobrazuje 0 pod 3f km/h, barvy: bílá <90, oranžová 90–120, červená >120. Roundel s limitem vpravo od "km/h" — dynamická hodnota z `SpeedLimitRepository`.
 
-- Displays `0` when `speedKmh < 3f` (GPS noise at standstill)
-- Color states: white < 90 km/h, orange `#FF9500` 90–120, red `#FF3B30` > 120
-- `fontFeatureSettings = "tnum"` for tabular numbers
-- Speed limit roundel (42dp white circle, red border) right of "km/h" — hardcoded "50", dynamic OSM maxspeed planned for v0.3
+## Module: SpeedLimit (data/speedlimit/SpeedLimitRepository.kt)
 
-## Module: MusicWidget (ui/music/)
+Nominatim reverse geocoding (`nominatim.openstreetmap.org`) — dotaz při přesunu >200m, vrací 50 (obec: city/town/village/suburb) nebo 90 (mimo). `User-Agent: CarLauncher/1.0` povinný. `LauncherViewModel` triggeruje `updateIfMoved(lat, lon)` při každé location změně. Sdílené přes Hilt singleton — `MapViewModel` a `LauncherViewModel` oba injectují a exposují `speedLimit: StateFlow<Int>`.
 
-**MediaSession access on Android 13+:** `MediaSessionManager.getActiveSessions()` requires the `NotificationListenerService` to be **actively bound** (not just permitted). The flow:
+## Module: WeatherCalendarWidget (ui/launcher/)
 
-1. `MediaListenerService` (stub `NotificationListenerService`) tracks its connection state in a companion `StateFlow<Boolean> isConnected`.
-2. `MediaSessionObserver.start()` calls `NotificationListenerService.requestRebind()` then collects `isConnected`.
-3. Only when `isConnected == true` does `querySessions()` call `getActiveSessions()`.
-4. `SecurityException` from `getActiveSessions()` = notification access not granted — silent fallback.
+**Počasí:** Open-Meteo API (zdarma, bez klíče) — `temperature_2m` + `weathercode` (WMO). Refresh každých 30 min. Fallback Praha (50.08, 14.42) pokud GPS nedostupné.
 
-**User setup required:** Settings → Apps → Special app access → Notification access → CarLauncher → Enable.
+**Kalendář:** `CalendarContract.Instances` — dnešní události (00:00–23:59), max 3, seřazené dle začátku. Vyžaduje `READ_CALENDAR` runtime permission.
 
-`MediaViewModel` calls `mediaObserver.start()` in `init`, `stop()` in `onCleared`. Position polling is a 1-second `flow { while(true) { emit(observer.currentPositionMs); delay(1000) } }` stateIn.
+## Module: SystemControlsWidget (ui/launcher/)
 
-`currentPositionMs` on `MediaSessionObserver` calculates real-time position: `state.position + (elapsedRealtime - lastPositionUpdateTime) * playbackSpeed`.
+Dva cards: HLASITOST (modrá `#60A5FA`) + JAS (jantarová `#FFC107`). Canvas kreslí barevnou výplň od spodku dle úrovně. Swipe nahoru = více, dolů = méně (citlivost 1.5×). Jas mění `window.attributes.screenBrightness`.
 
 ## Module: DockBar (ui/dock/)
 
-**DockSlot sealed class** (`data/model/DockItem.kt`):
-```kotlin
-sealed class DockSlot {
-    data class App(val packageName: String) : DockSlot()
-    data class SplitScreen(val packageName1: String, val packageName2: String, val label: String) : DockSlot()
-    object Empty    : DockSlot()
-    object Navigate : DockSlot()   // fixed last slot — never stored in DataStore
-}
-```
+**DockSlot sealed class** (`data/model/DockItem.kt`): `App(packageName)`, `SplitScreen(pkg1, pkg2, label)`, `Empty`, `Navigate`.
 
-**Split screen rule (enforced):** `packageName1` = navigation app (left), `packageName2` = music/secondary (right). NEVER swap.
+**DataStore** klíč `dock_slots_v2`, čárkou oddělené, 6 slotů: `"pkg"` / `"split:pkg1:pkg2:label"` (label používá `|`) / `"empty"`.
 
-**DataStore serialization** (`dock_slots_v2` key, comma-separated, 6 entries):
-- `"com.example.pkg"` — App
-- `"split:pkg1:pkg2:label"` — SplitScreen (label uses `|` instead of `,`)
-- `"empty"` — Empty
+**Long press** — 1500ms přes `withTimeout` + `TimeoutCancellationException` v `pointerInput`. `combinedClickable` byl odstraněn — `waitForUpOrCancellation()` vrací null i při gesture cancellation (ne jen na timeout), takže by spouštěl edit mode omylem.
 
-Default 6 slots: Dialer, YouTube Music, Google Maps, Mapy.cz, `split:com.waze:…youtube.music:Waze + Hudba`, `split:com.tomtom.speedcams.android.map:…youtube.music:TomTom + Hudba`.
+**SplitScreen pravidlo:** `packageName1` = navigace (vlevo), `packageName2` = hudba/sekundární (vpravo). NIKDY nezaměňovat.
 
-**Icons** are not persisted — resolved lazily at render time via `rememberAppIcon(packageName)` / `rememberAppLabel(packageName)` (synchronous `PackageManager` calls inside `remember`).
+**launchSplitScreen:** Bez public API na Android 16. Launches pkg1 ihned, pak po 650ms pkg2 s `FLAG_ACTIVITY_LAUNCH_ADJACENT + FLAG_ACTIVITY_MULTIPLE_TASK`. Musí být voláno z Activity kontextu.
 
-**Edit mode:** long press any slot → wiggle animation (`Animatable` + `LaunchedEffect`) + `SlotPicker` bottom sheet opens.
+## Module: WidgetScreen (ui/widgets/)
 
-**launchSplitScreen:** No public API on Android 16 for forced split screen. Launches pkg1 immediately from Activity, then 650ms later launches pkg2 with `FLAG_ACTIVITY_LAUNCH_ADJACENT + FLAG_ACTIVITY_MULTIPLE_TASK` via `lifecycleScope.launch { delay(650L) }`. Must be called from Activity instance — application Context does not trigger the adjacent split.
+Android AppWidget host se dvěma vrstvami:
 
-**Dock style:** 88dp rounded card (24dp radius, `CarColors.Surface` + `BorderSoft`), slots `SpaceEvenly`. The Navigovat button is NOT in the dock — it lives as an overlay in `MapWidget` (BottomEnd), wired via `onNavigate` lambda from LauncherScreen → `DockViewModel.launchNavigation()`.
+**WidgetViewModel** — `LongPressWidgetHost` (HOST_ID=1337), `AppWidgetManager`. Stavy: `stacks: List<WidgetStack>` (každý slot = `WidgetStack(widgetIds: List<Int>)`), `template: WidgetLayoutTemplate`. Persistence: DataStore `"widgets"` — sloty odděleny `;`, widget IDs v slotu `|`.
 
-**MusicWidget header:** Bluetooth icon + "YouTube Music" label (static) + `EqualizerAnimation` (4 bars, animates only when `isPlaying`).
+**WidgetLayoutTemplate:** `GRID_2X2` (4 sloty), `WIDE_TOP_TWO_BOTTOM` (3 sloty), `TWO_WIDE_ROWS` (2 sloty).
 
-**SlotPicker:** `ModalBottomSheet` loading all CATEGORY_LAUNCHER apps via `Intent(ACTION_MAIN).addCategory(CATEGORY_LAUNCHER)`, sorted alphabetically, filtered by search query. 5-column grid.
+**WidgetScreen:** grid slotů, každý `SlotCard` → `StackContent` s `VerticalPager` (swipe pro přepínání widgetů v stacku). Edit mode overlay (tmavý scrim + Delete/Add tlačítka) se aktivuje long pressem na widget.
+
+**LongPressWidgetHostView** — override `AppWidgetHostView` s `Handler.postDelayed(1500ms)`. `ACTION_DOWN` → start timer, `ACTION_MOVE` >12dp → cancel timer, `ACTION_UP` → cancel timer. Při fired long pressu: nahrazuje `ACTION_UP` za `ACTION_CANCEL` pro children (zabraňuje spuštění widgetu).
+
+**Widget picker:** `MainActivity.launchWidgetPicker(slotIndex)` — `AppWidgetManager.ACTION_APPWIDGET_PICK` Intent, result v `onActivityResult` → `viewModel.addWidgetToSlot(slotIndex, widgetId)`.
+
+## Module: MusicWidget (ui/music/)
+
+`MediaSessionManager.getActiveSessions()` vyžaduje aktivně bound `NotificationListenerService`. Flow: `MediaListenerService.isConnected` StateFlow → `MediaSessionObserver.start()` čeká na `isConnected==true` → `querySessions()`. `SecurityException` = notification access not granted → silent fallback.
+
+`currentPositionMs` na `MediaSessionObserver`: `state.position + (elapsedRealtime - lastPositionUpdateTime) * playbackSpeed`.
+
+**User setup:** Nastavení → Aplikace → Speciální přístup → Přístup k oznámením → CarLauncher → Povolit.
 
 ## GPS Pipeline
 
 ```
 FusedLocationProviderClient (500ms / 5s / 30s)
-  → LocationCallback  [HandlerThread("location-thread") — NOT main thread]
+  → LocationCallback  [HandlerThread("location-thread")]
   → LocationProcessor.process(Location)
       → KalmanFilter (2D, Q=3 m/s)
-      → speed: location.speed * 3.6f, rolling avg of last 3 samples
+      → speed: location.speed * 3.6f, rolling avg 3 samples
   → VehicleDisplayLocation (lat, lng, speedKmh, bearingDeg, accuracyM, timestamp)
   → LocationRepository._vehicleLocation: MutableStateFlow
-  → MapViewModel / LauncherViewModel: StateFlow
+  → LauncherViewModel / MapViewModel: StateFlow
+  → SpeedLimitRepository.updateIfMoved() (při každé změně)
 ```
 
-`LocationRepository.startTracking()` / `stopTracking()` called by `LauncherViewModel` init/onCleared. Has `isTracking` guard. Runtime location permission requested in `MainActivity.onCreate()`.
+`LocationRepository.startTracking()` / `stopTracking()` volá `LauncherViewModel` v init/onCleared.
 
 ## Planned / Not Yet Implemented
 
-- **`LocationForegroundService`** — declared in manifest, stub only
-- **Offline map** — PMTiles v3 parser + NanoHTTPD present in `data/map/`; MapWidget needs to switch back to vector style when offline tiles are needed
-- **Adaptive GPS interval** — fixed at 500ms; should drop to 5s when parked
-- **Speed limit feature** — planned for v0.3 (OSM `maxspeed` tag)
-- **QuickDest navigation wiring** — `QuickDestWidget` shows static placeholder data; tapping does nothing yet
+- **`LocationForegroundService`** — deklarováno v manifestu, stub pouze
+- **Offline mapa** — PMTiles v3 parser + NanoHTTPD v `data/map/`; MapWidget potřebuje přepnout na vector styl
+- **Adaptive GPS interval** — fixní 500ms; mělo by klesnout na 5s při parkování
+- **QuickDest navigační wiring** — QuickDestWidget / QuickDestViewModel existuje ale nepoužívá se
 
 ## Design Reference
 
-Finalized UI design: `.claude/design/` (CarLauncher.html, app.jsx, widgets.jsx, icons.jsx). Do not iterate — implement as-is.
+Finalizovaný design: `.claude/design/` (CarLauncher.html, app.jsx, widgets.jsx, icons.jsx). Implementovat přesně, neiterorat.
 
-Key layout values:
-- SpeedDisplay number: 56sp bold, tabular-nums
-- DockBar height: 88dp
-- Dock icon outer: 64dp touch target, 52dp visual, 14dp corner radius
-- Navigovat button: 52dp height, accent green, 26dp corner radius
-- All touch targets: min 48×48 dp
-- MusicWidget: 220dp wide, TopEnd, 16dp padding
+Klíčové hodnoty:
+- SpeedDisplay číslo: 56sp bold, tabular-nums
+- DockBar výška: 88dp, slot touch target: 64dp, vizuální: 52dp, corner: 14dp
+- Všechny touch targets: min 48×48 dp
 
 ## Subagents
 
 | Task | Load file |
 |------|-----------|
-| Code review (any Kotlin/Compose) | `.claude/subagent_01_code_review.md` |
+| Code review (Kotlin/Compose) | `.claude/subagent_01_code_review.md` |
 | Performance audit, GPS latency, FPS | `.claude/subagent_02_performance.md` |
 | UI layout, tap targets, car-safe design | `.claude/subagent_03_uiux.md` |
 | Architecture decision, Hilt scope | `.claude/subagent_04_architecture.md` |
