@@ -83,6 +83,11 @@ dependencies {
     // DataStore — dock slot persistence
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
+    // Room — trip data persistence
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    kapt(libs.room.compiler)
+
     // MapLibre
     implementation("org.maplibre.gl:android-sdk:11.8.0")
 

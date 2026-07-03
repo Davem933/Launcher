@@ -73,6 +73,7 @@ fun WidgetScreen(
     // -1 = no edit mode active; 0-N = slot index in edit mode
     var editSlot by remember { mutableIntStateOf(-1) }
     var showTemplatePicker by remember { mutableStateOf(false) }
+    var showTripHistory by remember { mutableStateOf(false) }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -91,6 +92,20 @@ fun WidgetScreen(
             .fillMaxSize()
             .background(CarColors.Bg)
     ) {
+        // ── Trip Computer + Jízdní deník — fixní sekce nahoře ───────────────
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            TripComputerWidget(modifier = Modifier.weight(1f))
+            JizdniDenikWidget(
+                modifier = Modifier.weight(1f),
+                onOpenHistory = { showTripHistory = true }
+            )
+        }
+
         // ── Template picker button ────────────────────────────────────────────
         Row(
             modifier = Modifier
@@ -251,6 +266,11 @@ fun WidgetScreen(
                 .padding(bottom = 8.dp),
             onLaunchSplitScreen = onLaunchSplitScreen
         )
+    }
+
+    if (showTripHistory) {
+        TripHistoryScreen(onBack = { showTripHistory = false })
+        return
     }
 
     if (showTemplatePicker) {

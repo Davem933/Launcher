@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.carlauncher.data.location.LocationRepository
 import com.example.carlauncher.data.model.VehicleDisplayLocation
 import com.example.carlauncher.data.speedlimit.SpeedLimitRepository
+import com.example.carlauncher.data.trip.TripDetector
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,6 +18,7 @@ import javax.inject.Inject
 class LauncherViewModel @Inject constructor(
     private val repository: LocationRepository,
     private val speedLimitRepository: SpeedLimitRepository,
+    private val tripDetector: TripDetector,
 ) : ViewModel() {
 
     val vehicleLocation: StateFlow<VehicleDisplayLocation?> = repository.vehicleLocation
@@ -34,6 +36,7 @@ class LauncherViewModel @Inject constructor(
 
     init {
         repository.startTracking()
+        tripDetector.start()
         viewModelScope.launch {
             repository.vehicleLocation.collect { loc ->
                 loc ?: return@collect
@@ -45,5 +48,6 @@ class LauncherViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         repository.stopTracking()
+        tripDetector.stop()
     }
 }
