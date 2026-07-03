@@ -43,6 +43,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.carlauncher.ui.launcher.LauncherScreen
 import com.example.carlauncher.ui.theme.CarLauncherTheme
+import com.example.carlauncher.ui.widgets.TripScreen
 import com.example.carlauncher.ui.widgets.WidgetScreen
 import com.example.carlauncher.ui.widgets.WidgetViewModel
 import dagger.hilt.android.AndroidEntryPoint
@@ -120,7 +121,7 @@ class MainActivity : ComponentActivity() {
             val isDark = if (themeVm.hasSensor) isDarkSensor else isSystemInDarkTheme()
 
             CarLauncherTheme(isDark = isDark) {
-                val pagerState = rememberPagerState(pageCount = { 2 })
+                val pagerState = rememberPagerState(pageCount = { 3 })
 
                 Box(modifier = Modifier.fillMaxSize()) {
                     HorizontalPager(
@@ -137,6 +138,9 @@ class MainActivity : ComponentActivity() {
                                 onLaunchSplitScreen = { pkg1, pkg2 -> launchSplitScreen(pkg1, pkg2) },
                                 onAddWidget = { slotIndex -> launchWidgetPicker(slotIndex) }
                             )
+                            2 -> TripScreen(
+                                onLaunchSplitScreen = { pkg1, pkg2 -> launchSplitScreen(pkg1, pkg2) }
+                            )
                         }
                     }
 
@@ -146,7 +150,7 @@ class MainActivity : ComponentActivity() {
                             .padding(bottom = 100.dp),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        repeat(2) { i ->
+                        repeat(3) { i ->
                             Box(
                                 modifier = Modifier
                                     .size(6.dp)
