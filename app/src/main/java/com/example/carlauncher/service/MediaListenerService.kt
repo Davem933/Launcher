@@ -33,6 +33,8 @@ class MediaListenerService : NotificationListenerService() {
             "com.google.android.apps.maps",
             "com.waze",
             "cz.seznam.mapy",
+            "com.tomtom.speedcams.android.map",
+            "com.here.app.maps",
         )
         // Apps whose icons are always the app logo, not a turn arrow
         private val LOGO_ONLY_ICON_PACKAGES = setOf(
