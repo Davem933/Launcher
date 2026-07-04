@@ -51,7 +51,7 @@ import com.example.carlauncher.ui.theme.CarColors
 private data class NavApp(val pkg: String, val label: String, val color: Color)
 
 private val NAV_APPS = listOf(
-    NavApp("com.waze",                    "Waze",        Color(0xFF00BCD4)),
+    NavApp("app.organicmaps",             "Organic Maps",Color(0xFF2E7D32)),
     NavApp("cz.seznam.mapy",              "Mapy.cz",     Color(0xFF4CAF50)),
     NavApp("com.google.android.apps.maps","Google Maps", Color(0xFF5C6BC0)),
 )
