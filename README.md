@@ -31,7 +31,7 @@ When navigation is active, **NavWidget** replaces the right column with turn-by-
 <img width="1920" height="1200" alt="Screenshot_20260629-165619" src="https://github.com/user-attachments/assets/92b05616-a44a-42f6-bc77-83a89db958bc" />
 <img width="1920" height="1200" alt="image" src="https://github.com/user-attachments/assets/7ca096b1-ff9b-41fa-87c0-ffe5f3e0c6e8" />
 <img width="1920" height="1200" alt="image" src="https://github.com/user-attachments/assets/e9f8166f-3805-453d-ade5-3812f2afb1a0" />
-<img width="1039" height="648" alt="image" src="https://github.com/user-attachments/assets/d7ec13ed-b20a-4e00-b692-9328538557fa" />
+<img width="1030" height="642" alt="image" src="https://github.com/user-attachments/assets/360fdb70-0d9f-46e4-879a-91dc1e7fcadc" />
 
 
 ---
