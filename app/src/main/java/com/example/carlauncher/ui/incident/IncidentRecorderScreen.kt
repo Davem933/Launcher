@@ -111,7 +111,6 @@ fun IncidentRecorderScreen(
     ) {
         if (hasCamera) {
             IncidentCameraView(
-                hasPermissions = hasCamera,
                 viewModel = viewModel,
                 modifier = Modifier.fillMaxSize(),
             )

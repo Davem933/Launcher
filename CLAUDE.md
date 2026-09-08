@@ -208,7 +208,7 @@ FusedLocationProviderClient (500ms / 5s / 30s)
 
 ## Module: Incident Recorder (data/incident/, ui/incident/)
 
-Manuální „dashcam“ — plovoucí `FloatingActionButton` v `MainActivity` (vpravo, `Alignment.CenterEnd`) otevře celoobrazovkový `IncidentRecorderScreen` overlay. Toggle spustí/zastaví nahrávání videa přes CameraX.
+Manuální „dashcam“ — `IncidentFab` v `MainActivity`: přesouvatelné plovoucí tlačítko (`detectDragGestures`, pozice clampovaná do viewportu, uložená v `incidentDataStore` přes `IncidentButtonViewModel` jako dp offset). Tap otevře celoobrazovkový `IncidentRecorderScreen` overlay. Toggle spustí/zastaví nahrávání videa přes CameraX. `IncidentCameraView` rebinduje kameru na `Lifecycle.Event.ON_RESUME` (jinak černý náhled po návratu z jiné appky).
 
 **Feature flag:** `BuildConfig.INCIDENT_RECORDER_ENABLED` (z `local.properties`, default `true`). Vypnuto → tlačítko se nevykreslí, overlay nedostupný. CameraX + ML Kit závislosti se buildí vždy.
 

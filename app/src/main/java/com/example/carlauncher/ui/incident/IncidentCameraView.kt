@@ -4,11 +4,12 @@ import androidx.activity.ComponentActivity
 import androidx.camera.view.PreviewView
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 
 private class IncidentCameraHolder {
     var torndown = false
@@ -19,13 +20,13 @@ private class IncidentCameraHolder {
  * `ui/map/MapWidget.kt` (view created once in `remember`, bound against the Activity
  * lifecycle rather than `LocalLifecycleOwner`).
  *
- * Unlike `MapWidget` this is a full-screen overlay, not a pager page, so the disposal
- * teardown is unconditional — it fires only when the user closes the screen or the Activity
- * is destroyed.
+ * This composable only enters composition after CAMERA is granted and stays until the user
+ * closes the overlay, so the single [DisposableEffect] binds on entry and tears down on
+ * close. On every `ON_RESUME` the camera is re-bound so the preview surface reconnects after
+ * the launcher was briefly backgrounded (another app taking focus) — otherwise it stays black.
  */
 @Composable
 fun IncidentCameraView(
-    hasPermissions: Boolean,
     viewModel: IncidentViewModel,
     modifier: Modifier = Modifier,
 ) {
@@ -40,14 +41,18 @@ fun IncidentCameraView(
 
     AndroidView(factory = { previewView }, modifier = modifier)
 
-    LaunchedEffect(hasPermissions) {
-        if (hasPermissions) {
-            viewModel.bindCamera(activity, previewView.surfaceProvider)
-        }
-    }
-
     DisposableEffect(Unit) {
+        viewModel.bindCamera(activity, previewView.surfaceProvider)
+
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME && !holder.torndown) {
+                viewModel.bindCamera(activity, previewView.surfaceProvider)
+            }
+        }
+        activity.lifecycle.addObserver(observer)
+
         onDispose {
+            activity.lifecycle.removeObserver(observer)
             if (!holder.torndown) {
                 holder.torndown = true
                 viewModel.unbindCamera()

@@ -88,7 +88,14 @@ class IncidentRecorder @Inject constructor(
 
     suspend fun bind(lifecycleOwner: LifecycleOwner, surfaceProvider: Preview.SurfaceProvider) {
         if (bound) {
-            preview?.surfaceProvider = surfaceProvider
+            // Re-request the surface (toggle via null) so the preview reconnects after the
+            // Activity was stopped/resumed — re-setting the same provider can be a no-op.
+            withContext(Dispatchers.Main) {
+                preview?.let {
+                    it.surfaceProvider = null
+                    it.surfaceProvider = surfaceProvider
+                }
+            }
             return
         }
 
