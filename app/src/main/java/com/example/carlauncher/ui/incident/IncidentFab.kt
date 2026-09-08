@@ -1,6 +1,7 @@
 package com.example.carlauncher.ui.incident
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
@@ -22,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
@@ -31,7 +33,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.carlauncher.ui.theme.CarColors
 import kotlin.math.roundToInt
 
-private val FAB_SIZE = 56.dp
+private val FAB_SIZE = 64.dp
 private val EDGE_MARGIN = 16.dp
 
 /**
@@ -75,9 +77,10 @@ fun IncidentFab(
             modifier = Modifier
                 .offset { IntOffset(o.x.roundToInt(), o.y.roundToInt()) }
                 .size(FAB_SIZE)
-                .shadow(6.dp, CircleShape)
+                .shadow(14.dp, CircleShape)
                 .clip(CircleShape)
-                .background(CarColors.Surface.copy(alpha = 0.92f))
+                .background(CarColors.Surface)
+                .border(3.dp, Color.White, CircleShape)
                 .pointerInput(maxX, maxY) {
                     detectDragGestures(
                         onDragStart = { dragOffset = o },
@@ -103,7 +106,8 @@ fun IncidentFab(
             Icon(
                 imageVector = Icons.Default.Videocam,
                 contentDescription = "Incident Recorder",
-                tint = CarColors.Text,
+                tint = Color.White,
+                modifier = Modifier.size(32.dp),
             )
         }
     }
