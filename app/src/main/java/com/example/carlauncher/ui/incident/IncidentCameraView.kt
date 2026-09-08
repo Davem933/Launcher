@@ -1,5 +1,7 @@
 package com.example.carlauncher.ui.incident
 
+import android.view.ViewGroup
+import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
 import androidx.camera.view.PreviewView
 import androidx.compose.runtime.Composable
@@ -33,6 +35,10 @@ fun IncidentCameraView(
     val activity = LocalContext.current as ComponentActivity
     val previewView = remember {
         PreviewView(activity).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            )
             implementationMode = PreviewView.ImplementationMode.COMPATIBLE
             scaleType = PreviewView.ScaleType.FILL_CENTER
         }
