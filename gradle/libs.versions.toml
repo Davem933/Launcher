@@ -12,6 +12,8 @@ activityCompose = "1.9.1"
 navigationCompose = "2.7.7"
 coroutines = "1.8.1"
 room = "2.6.1"
+camerax = "1.4.2"
+mlkitText = "16.0.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -38,6 +40,13 @@ coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutin
 room-runtime  = { group = "androidx.room", name = "room-runtime",  version.ref = "room" }
 room-ktx      = { group = "androidx.room", name = "room-ktx",      version.ref = "room" }
 room-compiler = { group = "androidx.room", name = "room-compiler",  version.ref = "room" }
+
+androidx-camera-core      = { group = "androidx.camera", name = "camera-core",      version.ref = "camerax" }
+androidx-camera-camera2   = { group = "androidx.camera", name = "camera-camera2",   version.ref = "camerax" }
+androidx-camera-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", version.ref = "camerax" }
+androidx-camera-view      = { group = "androidx.camera", name = "camera-view",      version.ref = "camerax" }
+androidx-camera-video     = { group = "androidx.camera", name = "camera-video",     version.ref = "camerax" }
+mlkit-text-recognition    = { group = "com.google.mlkit", name = "text-recognition", version.ref = "mlkitText" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

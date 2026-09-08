@@ -15,6 +15,9 @@ val localProps = Properties().apply {
 }
 val mapyczApiKey: String = localProps.getProperty("MAPYCZ_API_KEY", "MAPY_API_KEY_HERE")
 
+// Incident Recorder feature toggle — disable locally with INCIDENT_RECORDER_ENABLED=false
+val incidentRecorderEnabled: String = localProps.getProperty("INCIDENT_RECORDER_ENABLED", "true")
+
 android {
     namespace = "com.example.carlauncher"
     compileSdk = 36
@@ -27,6 +30,7 @@ android {
         versionName = "1.0"
 
         buildConfigField("String", "MAPYCZ_API_KEY", "\"$mapyczApiKey\"")
+        buildConfigField("boolean", "INCIDENT_RECORDER_ENABLED", incidentRecorderEnabled)
     }
 
     buildTypes {
@@ -87,6 +91,16 @@ dependencies {
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     kapt(libs.room.compiler)
+
+    // CameraX — Incident Recorder video capture + frame analysis
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
+    implementation(libs.androidx.camera.video)
+
+    // ML Kit Text Recognition (bundled Latin model — fully offline, no Play Services)
+    implementation(libs.mlkit.text.recognition)
 
     // MapLibre
     implementation("org.maplibre.gl:android-sdk:11.8.0")

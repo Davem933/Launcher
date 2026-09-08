@@ -206,6 +206,22 @@ FusedLocationProviderClient (500ms / 5s / 30s)
 
 `LocationRepository.startTracking()` / `stopTracking()` volá `LauncherViewModel` v init/onCleared.
 
+## Module: Incident Recorder (data/incident/, ui/incident/)
+
+Manuální „dashcam“ — plovoucí `FloatingActionButton` v `MainActivity` (vpravo, `Alignment.CenterEnd`) otevře celoobrazovkový `IncidentRecorderScreen` overlay. Toggle spustí/zastaví nahrávání videa přes CameraX.
+
+**Feature flag:** `BuildConfig.INCIDENT_RECORDER_ENABLED` (z `local.properties`, default `true`). Vypnuto → tlačítko se nevykreslí, overlay nedostupný. CameraX + ML Kit závislosti se buildí vždy.
+
+**Nahrávání:** CameraX `VideoCapture<Recorder>` (Quality.HD → SD fallback), **bez zvuku** (žádné `RECORD_AUDIO`). Výstup do `getExternalFilesDir(null)/incidents/incident_<yyyyMMdd_HHmmss>.mp4`. `IncidentRecorder` (`@Singleton`) vlastní `ProcessCameraProvider` + `Preview` + `VideoCapture` + `ImageAnalysis`, `bind(activity, surfaceProvider)` je idempotentní, `bindToLifecycle(activity, ...)` (ne `LocalLifecycleOwner`). 3-use-case bind má fallback na `Preview + VideoCapture`.
+
+**GPS:** `IncidentLocationSource` (`@Singleton`) — raw `LocationManager.GPS_PROVIDER` (+ `NETWORK_PROVIDER` warm-up), interval 1500 ms, vlastní `HandlerThread("incident-gps")`. **Zcela oddělené** od `LocationRepository` (žádné Play Services, žádný Kalman).
+
+**Detekce SPZ:** `ImageAnalysis` → `PlateAnalyzer` (jen každý `DETECT_EVERY_N_FRAMES`=8. snímek, `@Volatile busy` guard, single-thread executor) → `PlateDetector` (rozhraní, bindnuté v `di/IncidentBindsModule.kt`). Výchozí `MlKitPlateDetector` = ML Kit Text Recognition v2 **bundled** (offline, `Tasks.await`) + `PlateRegex` (CZ/EU formát) + geometrie. TFLite YOLO lze doplnit výměnou `@Binds`.
+
+**Metadata:** overlay (`IncidentOverlay` Compose `Canvas`) je sourozenec `PreviewView` — **nikdy** se nepředá CameraX, `.mp4` zůstává nezměněný. Sidecar `incident_<...>.json` (stejný basename, `org.json`) se zapisuje ve `VideoRecordEvent.Finalize`: `startedAt`/`stoppedAt`, `gps[]` časová řada, `plates[]` (`text` + normalizovaný `box` 0..1). GPS body + detekce se během nahrávání bufferují in-memory v `IncidentSession` pod `synchronized`.
+
+**Oprávnění:** `CAMERA` + `ACCESS_FINE_LOCATION` řešeno in-Compose (`rememberLauncherForActivityResult`) v `IncidentRecorderScreen`, ne v `MainActivity.onCreate`. Zavření overlaye / `onCleared` volá `recorder.stop()` (kvůli `moov` atomu) + `locationSource.stop()`.
+
 ## Planned / Not Yet Implemented
 
 - **`LocationForegroundService`** — deklarováno v manifestu, stub pouze

@@ -26,8 +26,14 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -41,7 +47,9 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
+import com.example.carlauncher.ui.incident.IncidentRecorderScreen
 import com.example.carlauncher.ui.launcher.LauncherScreen
+import com.example.carlauncher.ui.theme.CarColors
 import com.example.carlauncher.ui.theme.CarLauncherTheme
 import com.example.carlauncher.ui.widgets.TripScreen
 import com.example.carlauncher.ui.widgets.WidgetScreen
@@ -122,6 +130,8 @@ class MainActivity : ComponentActivity() {
 
             CarLauncherTheme(isDark = isDark) {
                 val pagerState = rememberPagerState(pageCount = { 3 })
+                val incidentEnabled = BuildConfig.INCIDENT_RECORDER_ENABLED
+                var showIncidentRecorder by remember { mutableStateOf(false) }
 
                 Box(modifier = Modifier.fillMaxSize()) {
                     HorizontalPager(
@@ -161,6 +171,25 @@ class MainActivity : ComponentActivity() {
                                     )
                             )
                         }
+                    }
+
+                    // Incident Recorder — floating entry point (feature-flagged)
+                    if (incidentEnabled && !showIncidentRecorder) {
+                        FloatingActionButton(
+                            onClick = { showIncidentRecorder = true },
+                            modifier = Modifier
+                                .align(Alignment.CenterEnd)
+                                .padding(end = 16.dp)
+                                .size(52.dp),
+                            containerColor = CarColors.Surface.copy(alpha = 0.85f),
+                            contentColor = CarColors.Text,
+                        ) {
+                            Icon(Icons.Default.Videocam, contentDescription = "Incident Recorder")
+                        }
+                    }
+
+                    if (incidentEnabled && showIncidentRecorder) {
+                        IncidentRecorderScreen(onClose = { showIncidentRecorder = false })
                     }
                 }
             }
