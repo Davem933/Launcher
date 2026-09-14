@@ -10,7 +10,7 @@ Personal Android Car Launcher for Lenovo Tab M10 Plus (3rd Gen). Landscape-locke
 
 **Device:** Lenovo Tab M10 Plus (3rd Gen), Android 16 (API 36), MediaTek Helio G80. The physical device runs fine — the 16 KB page size constraint applies only to certain ARM chipsets; Helio G80 does not enforce it.
 
-**Emulator:** Use API 34 (Android 14) x86_64 with Google Play. Do NOT use API 35+ emulators — `libmaplibre.so` 11.5.2 is not 16 KB page-aligned and will fail to load.
+**Emulator:** Use API 34 (Android 14) x86_64 with Google Play. Do NOT use API 35+ emulators — this was confirmed for MapLibre's `libmaplibre.so` (not 16 KB page-aligned); the app now uses Mapbox Maps SDK instead, whose native `.so` libraries carry the same theoretical risk but haven't been individually re-verified — keep testing on API 34 or the physical device until someone checks.
 
 ## Build & Install
 
@@ -27,7 +27,12 @@ $adb = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
 & $adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-ADB logcat tags: `NavRaw`, `NavListener`, `MediaDebug`, `SpeedLimit`, `MapWidget`, `DockViewModel`
+ADB logcat tags: `NavRaw`, `NavListener`, `MediaDebug`, `SpeedLimit`, `MapWidget`, `DockViewModel`, `ParkingRepository`, `MapViewModel`
+
+**Mapbox setup (required to build):** two tokens, neither committed to git in principle —
+- `MAPBOX_ACCESS_TOKEN` (public, `pk.…`) in `local.properties` → `BuildConfig.MAPBOX_ACCESS_TOKEN` → set via `MapboxOptions.accessToken` in `CarLauncherApp.onCreate()`.
+- `MAPBOX_DOWNLOADS_TOKEN` (secret, `sk.…`, scope `DOWNLOADS:READ`) in `~/.gradle/gradle.properties` (machine-wide, never per-project) — required just for Gradle to authenticate against Mapbox's private Maven repo (`settings.gradle.kts`) to download `com.mapbox.maps:android`. Get both at https://account.mapbox.com/access-tokens/.
+- ⚠️ `local.properties` is (incorrectly, pre-existing) tracked in git in this repo and not in `.gitignore` — it already contains both `MAPBOX_ACCESS_TOKEN` and the older `MAPYCZ_API_KEY` in the working copy. Don't `git add`/commit it. This should eventually be fixed with `git rm --cached local.properties` + a `.gitignore` entry, but that cleanup hasn't happened yet.
 
 ## Architecture
 
@@ -36,10 +41,11 @@ Single-module app (`app/`). Package structure:
 ```
 ui/
   launcher/     LauncherScreen, LauncherViewModel, StatusBar
+                MapNavPanel (dlouhý stisk přepíná Mapa ↔ Navigace)
                 WeatherCalendarWidget + ViewModel (počasí + kalendář)
                 SystemControlsWidget (hlasitost + jas)
   navigation/   NavAreaWidget (podmíněný wrapper), NavWidget (turn-by-turn)
-  map/          MapWidget, MapViewModel, MapStyleHelper, TileConfig
+  map/          MapWidget, MapViewModel, TileConfig, AppLocationProvider
   speed/        SpeedDisplay
   music/        MusicWidget, MediaViewModel
   dock/         DockBar, DockViewModel, SlotPicker
@@ -54,8 +60,8 @@ data/
   media/        MediaSessionObserver
   dock/         DockDataStoreExt
   widgets/      WidgetDataStoreExt
-  model/        VehicleDisplayLocation, DockItem, DockSlot, WidgetSlot, Poi
-  map/          PmtilesHttpServer (offline, nepoužíváno)
+  poi/          ParkingRepository (Overpass), ParkingFetchThrottle
+  model/        VehicleDisplayLocation, DockItem, DockSlot, WidgetSlot, Parking
 di/
   LocationModule.kt
 service/
@@ -84,7 +90,8 @@ Column(fillMaxSize, bg = CarColors.Bg) {
     StatusBar(44dp)                        ← čas HH:mm + české datum | baterie, WiFi, GPS tečka
     Box(weight 1f) {
         Row(p = 12/8dp, spacing 12dp) {
-            NavAreaWidget(weight 1.85f)    ← ~65% šířka: NavLanding nebo NavWidget
+            MapNavPanel(weight 1.85f)      ← ~65% šířka: MapWidget (default) nebo NavAreaWidget,
+                                              přepínatelné dlouhým stiskem (viz níže)
             Column(weight 1f) {            ← ~35% šířka
                 MusicWidget(weight 1f)
                 SystemControlsWidget()     ← hlasitost (modrá) + jas (jantarová), swipe nahoru/dolů
@@ -98,6 +105,16 @@ Column(fillMaxSize, bg = CarColors.Bg) {
 ```
 
 `SpeedDisplay` je uvnitř `MapWidget` v `BottomStart` s `padding(18dp)`.
+
+## Module: MapNavPanel (ui/launcher/MapNavPanel.kt)
+
+Levý panel (~65% šířky) přepíná mezi `MapWidget` a `NavAreaWidget` dlouhým stiskem (1500ms, zrušení při pohybu >12dp — stejný vzor jako `LongPressWidgetHostView`, vlastní `pointerInput` detektor s `PointerEventPass.Initial` a bez `consume()`, aby pan/zoom mapy a tlačítka pod ním fungovaly beze změny).
+
+`resolveEffectiveView(isNavActive, manualView)` je čistá funkce: `NavRepository.isActive == true` vždy vyhraje (bezpečnostní priorita) bez ohledu na ruční volbu; jinak poslední ruční volba v této relaci, nebo `MAP` jako výchozí. Stav je jen v `remember` (ne DataStore) — resetuje se na Mapu po restartu.
+
+Dlouhý stisk otevře `ModalBottomSheet` s kartami "Mapa"/"Navigace". Tlačítko "Navigovat" v `MapWidget` (`onNavigate` callback) přepne panel na `NavAreaWidget`.
+
+**Pozor při úpravách:** lokální composable proměnná pojmenovaná `location` (GPS fix) stíní `MapView.location` (Mapbox location-component plugin extension property) uvnitř `mapView.apply { }` bloků — vždy použít `this.location`, jinak dostane "Unresolved reference" na Mapbox API bez zjevné příčiny.
 
 ## Module: Navigation
 
@@ -120,23 +137,23 @@ Idle notifikace jsou přeskočeny: `hasNavContent = distance.isNotEmpty() || dis
 
 `parseTripSummary` splituje na `·` (U+00B7, Google Maps) i `•` (U+2022, Mapy.cz).
 
-## Module: Map (MapWidget.kt)
+## Module: Map (MapWidget.kt) — Mapbox Maps SDK
 
-**Tile source:** Mapy.cz online raster tiles. API klíč v `local.properties` (`MAPYCZ_API_KEY=...`, gitignored) → `BuildConfig.MAPYCZ_API_KEY` — nikdy hardcodovat, zobrazovat ani logovat hodnotu klíče.
+Přešlo z MapLibre + offline PMTiles na **Mapbox Maps SDK** (`com.mapbox.maps:android`, `TileConfig.kt` má přesnou verzi) — online, žádný offline fallback. `MapView` a `GeoJsonSource`/`MapboxMap` reference žijí v plain `MapState` třídě v `remember {}` — **nikdy** v `mutableStateOf` (stejné pravidlo jako u MapLibre dřív).
 
-**Style JSON** builduje `buildMapyczStyleJson(tileUrl)` v `MapStyleHelper.kt` — raster source + raster layer.
+**Styl:** `Style.STANDARD` (Mapboxův dynamický 3D styl — budovy, landmarky), kamera s `pitch(45.0)` pro 3D pohled. Config vlastnosti (`lightPreset="night"`, `show3dObjects=true`) se nastavují přes `style.setStyleImportConfigProperty(importId, key, value)` **s importId `"basemap"`** — `"standard"` se použije jen když je Standard vnořený v custom style JSON pod tím jménem; špatné ID selže potichu (vrátí `Expected` s chybou, ne výjimku) a config se prostě neaplikuje.
 
-**Rounded corners** vyžaduje `MapLibreMapOptions.textureMode(true)` — výchozí SurfaceView ignoruje Compose `clip()`.
+**Doprava:** Standard nemá vestavěnou dopravu (na rozdíl od klasických `TRAFFIC_DAY`/`TRAFFIC_NIGHT` stylů) — přidána ručně jako extra `VectorSource` (`mapbox://mapbox.mapbox-traffic-v1`, `sourceLayer("traffic")`) + `LineLayer` obarvený podle `congestion` property (`Expression.match`), `slot("middle")`.
 
-**Inicializace:** `MapView` v `remember {}` → `getMapAsync` → `LaunchedEffect(mapAsyncReady)` načte styl, přidá `GeoJsonSource` + `SymbolLayer` pro marker.
+**Parkoviště:** Mapboxova vlastní POI data jsou v této oblasti řídká pro parkoviště — `ParkingRepository` (Overpass/OSM), fialová "P" ikona (`SymbolLayer` + canvas bitmap). **Overpass dotaz musí hledat `node` i `way`/`relation` s `out center`** — parkoviště jsou v OSM většinou plochy (`way`), ne body; dotaz jen na `node` vrací 0 výsledků i tam, kde parkoviště reálně jsou.
 
-**Marker:** canvas-drawn 128px bitmap (halo + zelený disk + bílý klín). Rotace přes `iconRotate` + `iconRotationAlignment("map")`.
+**Location puck:** Mapboxův vestavěný `mapView.location` (ne vlastní canvas marker) — nakrmený z `AppLocationProvider` (implementuje `LocationProvider`/`LocationConsumer`), který dostává už Kalman-filtrovanou/route-snapnutou pozici z `VehicleDisplayLocation`, ne z Mapboxího výchozího GPS providera → není potřeba location permission handling v tomto plugin. Ikona přes `createDefault2DPuck(withBearing = true)` — holý `LocationPuck2D()` bez obrázků nevykreslí nic (všechny image parametry `null`).
 
-**Kamera + marker:** `LaunchedEffect(location)` — jeden `animateCamera(CameraPosition.Builder().target().bearing(), 300ms)`. Nikdy dva sekvenční `animateCamera()` — ruší se navzájem.
+**Inicializace:** `MapView` v `remember {}` s `MapInitOptions(textureView = true)` (kvůli `clip()` zaoblení rohů). Gesta, location provider a `subscribeMapLoadingError` se nastavují **hned po vytvoření mapy** (mimo `loadStyle` callback) — ten callback fire-uje jen při úspěšném (online) načtení stylu, takže cokoliv uvnitř by bez signálu nikdy neproběhlo.
 
-**MapLibre objekty v Compose:** `MapLibreMap` a `GeoJsonSource` v plain `MapState` v `remember {}` — **nikdy** v `mutableStateOf`.
+**Gotcha:** `this.location` (viz Module: MapNavPanel výše) — composable `location` (GPS StateFlow) stíní `MapView.location` plugin property uvnitř `mapView.apply { }`.
 
-**MapLibre API quirks (11.5.x):** `addOnDidFailLoadingMapListener` je na `MapView`. `addOnMapLoadErrorListener` neexistuje. `addOnCameraChangeListener` neexistuje na `MapLibreMap`. Style JSON přes `buildString { append() }` (avoid trailing comma). `{fontstack}`/`{range}` v Kotlin `${}` templates jsou špatně parsed — použít `buildString`. `MapView.onStart()`/`onResume()` replay v `DisposableEffect`.
+**Nedostupné offline:** žádný fallback bez signálu (na rozdíl od starého MapLibre+PMTiles řešení) — přijaté riziko.
 
 ## Module: SpeedDisplay (ui/speed/SpeedDisplay.kt)
 
@@ -224,8 +241,9 @@ Manuální „dashcam“ — `IncidentFab` v `MainActivity`: přesouvatelné plo
 
 ## Planned / Not Yet Implemented
 
+- **Turn-by-turn navigace přes Mapbox Navigation SDK** — příští fáze. Aktuální `NavAreaWidget`/`NavWidget`/`NavRepository` zůstávají beze změny (čtou notifikace z Google Maps/Mapy.cz/Organic Maps); cíl je přidat druhou možnost — navigaci počítanou přímo v appce přes Mapbox — vedle té stávající, přepínatelnou. Vyžaduje samostatný Mapbox produkt (Navigation SDK, jiné oprávnění/pricing než Maps SDK) + rozhodnutí o vyhledávání cíle (Search Box API) a hlasových pokynech.
 - **`LocationForegroundService`** — deklarováno v manifestu, stub pouze
-- **Offline mapa** — PMTiles v3 parser + NanoHTTPD v `data/map/`; MapWidget potřebuje přepnout na vector styl
+- **Offline mapa** — záměrně opuštěno při přechodu na Mapbox (žádný fallback bez signálu); staré PMTiles+NanoHTTPD řešení bylo smazané, ne jen nepoužívané
 - **Adaptive GPS interval** — fixní 500ms; mělo by klesnout na 5s při parkování
 - **QuickDest navigační wiring** — QuickDestWidget / QuickDestViewModel existuje ale nepoužívá se
 
