@@ -1,6 +1,10 @@
 package com.example.carlauncher.ui.map
 
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.util.Log
+import com.example.carlauncher.data.model.Parking
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -41,6 +45,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mapbox.bindgen.Value
+import com.mapbox.geojson.Feature
+import com.mapbox.geojson.FeatureCollection
 import com.mapbox.geojson.Point
 import com.mapbox.maps.CameraOptions
 import com.mapbox.maps.MapInitOptions
@@ -57,16 +63,23 @@ import com.mapbox.android.gestures.MoveGestureDetector
 import com.mapbox.maps.extension.style.expressions.generated.Expression
 import com.mapbox.maps.extension.style.layers.addLayer
 import com.mapbox.maps.extension.style.layers.generated.LineLayer
+import com.mapbox.maps.extension.style.layers.generated.SymbolLayer
 import com.mapbox.maps.extension.style.layers.properties.generated.LineCap
 import com.mapbox.maps.extension.style.layers.properties.generated.LineJoin
 import com.mapbox.maps.extension.style.sources.addSource
+import com.mapbox.maps.extension.style.sources.generated.GeoJsonSource
 import com.mapbox.maps.extension.style.sources.generated.VectorSource
 
 private const val TRAFFIC_SOURCE_ID = "traffic-source"
 private const val TRAFFIC_LAYER_ID = "traffic-congestion"
 
+private const val PARKING_IMAGE_ID = "parking-icon"
+private const val PARKING_SOURCE_ID = "parking-source"
+private const val PARKING_LAYER_ID = "parking-layer"
+
 private class MapState {
     var mapboxMap: MapboxMap? = null
+    var parkingSource: GeoJsonSource? = null
     var destroyed = false
 }
 
@@ -221,6 +234,25 @@ fun MapWidget(
                                 .slot("middle")
                         )
 
+                        // Parking icons — Mapbox's own Standard POI data is sparse for parking
+                        // in this area, so this is sourced from Overpass/OSM like before instead
+                        // of relying on the style's built-in POIs (see ParkingRepository).
+                        style.addImage(PARKING_IMAGE_ID, createParkingIcon())
+                        val parkingSource = GeoJsonSource.Builder(PARKING_SOURCE_ID).build()
+                        style.addSource(parkingSource)
+                        mapState.parkingSource = parkingSource
+                        style.addLayer(
+                            SymbolLayer(PARKING_LAYER_ID, PARKING_SOURCE_ID)
+                                .iconImage(PARKING_IMAGE_ID)
+                                .iconAllowOverlap(true)
+                                .iconIgnorePlacement(true)
+                                .iconSize(0.7)
+                        )
+                        val pendingParking = viewModel.nearbyParking.value
+                        if (pendingParking.isNotEmpty()) {
+                            parkingSource.featureCollection(parkingToFeatureCollection(pendingParking))
+                        }
+
                         styleLoaded = true
                     }
                 }
@@ -289,6 +321,12 @@ fun MapWidget(
         }
     }
 
+    LaunchedEffect("parking") {
+        viewModel.nearbyParking.collect { parking ->
+            mapState.parkingSource?.featureCollection(parkingToFeatureCollection(parking))
+        }
+    }
+
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
@@ -314,4 +352,33 @@ fun MapWidget(
             if (!mapState.destroyed) { mapState.destroyed = true; mapView.onDestroy() }
         }
     }
+}
+
+private fun parkingToFeatureCollection(parking: List<Parking>): FeatureCollection {
+    val features = parking.map { p ->
+        Feature.fromGeometry(Point.fromLngLat(p.lng, p.lat))
+    }
+    return FeatureCollection.fromFeatures(features)
+}
+
+// Purple circle with a white "P" — matches the convention used by other nav apps on this device.
+private fun createParkingIcon(): Bitmap {
+    val size = 56
+    val c = size / 2f
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+
+    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.parseColor("#8B5CF6")
+        style = Paint.Style.FILL
+    }.also { canvas.drawCircle(c, c, c - 2f, it) }
+
+    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE
+        textSize = 28f
+        textAlign = Paint.Align.CENTER
+        isFakeBoldText = true
+    }.also { canvas.drawText("P", c, c - (it.descent() + it.ascent()) / 2f, it) }
+
+    return bitmap
 }
