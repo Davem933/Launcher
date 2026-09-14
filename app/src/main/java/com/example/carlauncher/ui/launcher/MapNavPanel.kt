@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationException
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -42,8 +43,6 @@ import com.example.carlauncher.data.navigation.NavRepository
 import com.example.carlauncher.ui.map.MapWidget
 import com.example.carlauncher.ui.navigation.NavAreaWidget
 import com.example.carlauncher.ui.theme.CarColors
-import kotlinx.coroutines.TimeoutCancellationException
-import kotlinx.coroutines.withTimeout
 
 /** Which content the left panel shows. MAP is the default when no navigation is active. */
 enum class PanelView { MAP, NAV }
@@ -81,7 +80,7 @@ private fun Modifier.detectPanelLongPress(onLongPress: () -> Unit): Modifier =
                     }
                 }
                 false
-            } catch (timeout: TimeoutCancellationException) {
+            } catch (timeout: PointerEventTimeoutCancellationException) {
                 true
             }
             if (longPressFired) onLongPress()
