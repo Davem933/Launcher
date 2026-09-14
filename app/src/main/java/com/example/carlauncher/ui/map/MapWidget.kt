@@ -46,18 +46,24 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import org.maplibre.android.camera.CameraUpdateFactory
-import org.maplibre.android.geometry.LatLng
-import org.maplibre.android.maps.MapLibreMap
-import org.maplibre.android.maps.MapLibreMapOptions
-import org.maplibre.android.maps.MapView
-import org.maplibre.android.maps.Style
-import org.maplibre.android.style.expressions.Expression
-import org.maplibre.android.style.layers.PropertyFactory
-import org.maplibre.android.style.layers.SymbolLayer
-import org.maplibre.android.style.sources.GeoJsonSource
-import org.maplibre.geojson.Feature
-import org.maplibre.geojson.Point
+import com.mapbox.geojson.Feature
+import com.mapbox.geojson.FeatureCollection
+import com.mapbox.geojson.Point
+import com.mapbox.maps.CameraOptions
+import com.mapbox.maps.MapInitOptions
+import com.mapbox.maps.MapView
+import com.mapbox.maps.MapboxMap
+import com.mapbox.maps.plugin.animation.MapAnimationOptions
+import com.mapbox.maps.plugin.animation.easeTo
+import com.mapbox.maps.plugin.gestures.OnMoveListener
+import com.mapbox.maps.plugin.gestures.gestures
+import com.mapbox.android.gestures.MoveGestureDetector
+import com.mapbox.maps.extension.style.expressions.dsl.generated.get
+import com.mapbox.maps.extension.style.layers.addLayer
+import com.mapbox.maps.extension.style.layers.generated.SymbolLayer
+import com.mapbox.maps.extension.style.layers.properties.generated.IconRotationAlignment
+import com.mapbox.maps.extension.style.sources.addSource
+import com.mapbox.maps.extension.style.sources.generated.GeoJsonSource
 
 private const val MARKER_IMAGE_ID = "vehicle-marker"
 private const val VEHICLE_SOURCE_ID = "vehicle-source"
@@ -67,8 +73,8 @@ private const val POI_SOURCE_ID = "poi-source"
 private const val POI_LAYER_ID = "poi-layer"
 
 private class MapState {
-    var map: MapLibreMap? = null
-    var source: GeoJsonSource? = null
+    var mapboxMap: MapboxMap? = null
+    var vehicleSource: GeoJsonSource? = null
     var poiSource: GeoJsonSource? = null
     var destroyed = false
 }
@@ -82,77 +88,43 @@ fun MapWidget(
     val context = LocalContext.current
     // Use the Activity lifecycle directly — HorizontalPager gives each page its own
     // LocalLifecycleOwner that may not advance to RESUMED while the page is offscreen,
-    // which would leave MapView stuck in onStart() and rendering a black surface.
+    // which would leave MapView stuck and rendering a black surface.
     val lifecycleOwner = context as ComponentActivity
     val location   by viewModel.vehicleLocation.collectAsStateWithLifecycle()
     val speedLimit by viewModel.speedLimit.collectAsStateWithLifecycle()
 
     val mapView = remember {
-        // textureMode: render via TextureView so Compose clip() can round the corners
+        // textureView: render via TextureView so Compose clip() can round the corners
         // (default SurfaceView is composited separately and ignores clipping)
-        val options = MapLibreMapOptions.createFromAttributes(context).textureMode(true)
-        MapView(context, options).also { it.onCreate(null) }
+        MapView(context, MapInitOptions(context = context, textureView = true))
     }
     val mapState = remember { MapState() }
-    var mapAsyncReady by remember { mutableStateOf(false) }
+    var styleLoaded by remember { mutableStateOf(false) }
     var isFollowing by remember { mutableStateOf(true) }
 
-    LaunchedEffect(mapAsyncReady) {
-        if (!mapAsyncReady) return@LaunchedEffect
-        val map = mapState.map ?: return@LaunchedEffect
+    LaunchedEffect(styleLoaded) {
+        if (!styleLoaded) return@LaunchedEffect
+        val map = mapState.mapboxMap ?: return@LaunchedEffect
 
-        val styleBuilder = Style.Builder().fromUri(TileConfig.STYLE_ASSET)
-        Log.d("MapWidget", "Loading style: ${TileConfig.STYLE_ASSET}")
-        map.setStyle(styleBuilder) { style ->
-            Log.d("MapWidget", "Style loaded OK, layers=${style.layers.size}")
-
-            // POI layer — below vehicle marker
-            PoiType.entries.forEach { type ->
-                style.addImage("poi-${type.name.lowercase()}", createPoiIcon(type))
-            }
-            val poiSource = GeoJsonSource(POI_SOURCE_ID)
-            style.addSource(poiSource)
-            mapState.poiSource = poiSource
-            style.addLayer(
-                SymbolLayer(POI_LAYER_ID, POI_SOURCE_ID).withProperties(
-                    PropertyFactory.iconImage(Expression.get("icon")),
-                    PropertyFactory.iconAllowOverlap(true),
-                    PropertyFactory.iconIgnorePlacement(true),
-                    PropertyFactory.iconSize(0.8f)
-                )
+        // Race-condition fix: seed source immediately if location already available
+        val currentLoc = location
+        if (currentLoc != null) {
+            mapState.vehicleSource?.feature(
+                featureWithBearing(currentLoc.lat, currentLoc.lng, currentLoc.bearingDeg)
             )
-            val pendingPois = viewModel.nearbyPois.value
-            if (pendingPois.isNotEmpty()) poiSource.setGeoJson(poisToGeoJson(pendingPois))
-
-            // Vehicle marker layer — on top
-            style.addImage(MARKER_IMAGE_ID, createVehicleMarkerBitmap())
-
-            val source = GeoJsonSource(VEHICLE_SOURCE_ID)
-            style.addSource(source)
-            mapState.source = source
-
-            // icon-rotate reads "bearing" property from each GeoJSON feature —
-            // rotation updates without touching the layer style (no style re-evaluation)
-            style.addLayer(
-                SymbolLayer(VEHICLE_LAYER_ID, VEHICLE_SOURCE_ID)
-                    .withProperties(
-                        PropertyFactory.iconImage(MARKER_IMAGE_ID),
-                        PropertyFactory.iconSize(0.5f),
-                        PropertyFactory.iconAllowOverlap(true),
-                        PropertyFactory.iconIgnorePlacement(true),
-                        PropertyFactory.iconRotationAlignment("map"),
-                        PropertyFactory.iconRotate(Expression.get("bearing"))
-                    )
+            map.setCamera(
+                CameraOptions.Builder()
+                    .center(Point.fromLngLat(currentLoc.lng, currentLoc.lat))
+                    .zoom(17.5)
+                    .build()
             )
-
-            // Race-condition fix: seed source immediately if location already available
-            val currentLoc = location
-            if (currentLoc != null) {
-                source.setGeoJson(featureWithBearing(currentLoc.lat, currentLoc.lng, currentLoc.bearingDeg))
-                map.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(currentLoc.lat, currentLoc.lng), 17.5))
-            } else {
-                map.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(50.0755, 14.4378), 17.5))
-            }
+        } else {
+            map.setCamera(
+                CameraOptions.Builder()
+                    .center(Point.fromLngLat(14.4378, 50.0755))
+                    .zoom(17.5)
+                    .build()
+            )
         }
     }
 
@@ -164,22 +136,66 @@ fun MapWidget(
         AndroidView(
             factory = {
                 mapView.apply {
-                    addOnDidFailLoadingMapListener { errorMessage ->
-                        Log.e("MapWidget", "Map load error: $errorMessage")
-                    }
-                    getMapAsync { map ->
-                        mapState.map = map
-                        map.uiSettings.isScrollGesturesEnabled = true
-                        map.uiSettings.isZoomGesturesEnabled = true
-                        map.uiSettings.isRotateGesturesEnabled = false
-                        map.uiSettings.isTiltGesturesEnabled = false
-                        map.uiSettings.isLogoEnabled = false
-                        map.uiSettings.isAttributionEnabled = false
-                        // reason == 1 → REASON_GESTURE (user touch)
-                        map.addOnCameraMoveStartedListener { reason ->
-                            if (reason == 1) isFollowing = false
+                    // loadStyle() is the current (v11) API — the older loadStyleUri() overloads
+                    // are deprecated in favor of this unified loader.
+                    mapboxMap.loadStyle(TileConfig.MAP_STYLE_URI) { style ->
+                        Log.d("MapWidget", "Style loaded OK")
+                        mapState.mapboxMap = mapboxMap
+
+                        // POI layer — below vehicle marker
+                        PoiType.entries.forEach { type ->
+                            style.addImage("poi-${type.name.lowercase()}", createPoiIcon(type))
                         }
-                        mapAsyncReady = true
+                        val poiSource = GeoJsonSource.Builder(POI_SOURCE_ID).build()
+                        style.addSource(poiSource)
+                        mapState.poiSource = poiSource
+                        style.addLayer(
+                            SymbolLayer(POI_LAYER_ID, POI_SOURCE_ID)
+                                .iconImage(get("icon"))
+                                .iconAllowOverlap(true)
+                                .iconIgnorePlacement(true)
+                                .iconSize(0.8)
+                        )
+                        val pendingPois = viewModel.nearbyPois.value
+                        if (pendingPois.isNotEmpty()) {
+                            poiSource.featureCollection(poisToFeatureCollection(pendingPois))
+                        }
+
+                        // Vehicle marker layer — on top
+                        style.addImage(MARKER_IMAGE_ID, createVehicleMarkerBitmap())
+                        val vehicleSource = GeoJsonSource.Builder(VEHICLE_SOURCE_ID).build()
+                        style.addSource(vehicleSource)
+                        mapState.vehicleSource = vehicleSource
+
+                        // icon-rotate reads "bearing" property from each GeoJSON feature —
+                        // rotation updates without touching the layer style (no style re-evaluation)
+                        style.addLayer(
+                            SymbolLayer(VEHICLE_LAYER_ID, VEHICLE_SOURCE_ID)
+                                .iconImage(MARKER_IMAGE_ID)
+                                .iconSize(0.5)
+                                .iconAllowOverlap(true)
+                                .iconIgnorePlacement(true)
+                                .iconRotationAlignment(IconRotationAlignment.MAP)
+                                .iconRotate(get("bearing"))
+                        )
+
+                        gestures.updateSettings {
+                            scrollEnabled = true
+                            pinchToZoomEnabled = true
+                            rotateEnabled = false
+                            pitchEnabled = false
+                        }
+                        // Detect user touch to pause auto-follow — mirrors the old
+                        // "reason == REASON_GESTURE" check from the previous map engine's camera listener.
+                        gestures.addOnMoveListener(object : OnMoveListener {
+                            override fun onMoveBegin(detector: MoveGestureDetector) {
+                                isFollowing = false
+                            }
+                            override fun onMove(detector: MoveGestureDetector): Boolean = false
+                            override fun onMoveEnd(detector: MoveGestureDetector) {}
+                        })
+
+                        styleLoaded = true
                     }
                 }
             },
@@ -191,7 +207,7 @@ fun MapWidget(
             speedLimitKmh = speedLimit,
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(start = 18.dp, bottom = 18.dp)  // dock no longer overlays the map
+                .padding(start = 18.dp, bottom = 18.dp)
         )
 
         // Navigovat — primary CTA, bottom-right corner of the map
@@ -222,16 +238,21 @@ fun MapWidget(
 
     LaunchedEffect(location) {
         val loc    = location ?: return@LaunchedEffect
-        val source = mapState.source ?: return@LaunchedEffect
+        val source = mapState.vehicleSource ?: return@LaunchedEffect
 
         val (snapLat, snapLng) = RouteSnapHelper.snapToRoute(
             loc.lat, loc.lng, viewModel.routePolyline.value
         )
 
-        source.setGeoJson(featureWithBearing(snapLat, snapLng, loc.bearingDeg))
+        source.feature(featureWithBearing(snapLat, snapLng, loc.bearingDeg))
 
         if (isFollowing) {
-            mapState.map?.animateCamera(CameraUpdateFactory.newLatLng(LatLng(snapLat, snapLng)), 500)
+            mapState.mapboxMap?.easeTo(
+                CameraOptions.Builder()
+                    .center(Point.fromLngLat(snapLng, snapLat))
+                    .build(),
+                MapAnimationOptions.mapAnimationOptions { duration(500) }
+            )
         }
     }
 
@@ -245,7 +266,7 @@ fun MapWidget(
 
     LaunchedEffect("poi") {
         viewModel.nearbyPois.collect { pois ->
-            mapState.poiSource?.setGeoJson(poisToGeoJson(pois))
+            mapState.poiSource?.featureCollection(poisToFeatureCollection(pois))
         }
     }
 
@@ -253,12 +274,10 @@ fun MapWidget(
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_START -> mapView.onStart()
+                // MapView v11.30.1 still exposes onResume() (unlike onPause(), which this
+                // SDK version doesn't have) — call it for parity with the previous map engine.
                 Lifecycle.Event.ON_RESUME -> mapView.onResume()
-                Lifecycle.Event.ON_PAUSE -> mapView.onPause()
                 Lifecycle.Event.ON_STOP -> mapView.onStop()
-                Lifecycle.Event.ON_DESTROY -> {
-                    if (!mapState.destroyed) { mapState.destroyed = true; mapView.onDestroy() }
-                }
                 else -> {}
             }
         }
@@ -272,19 +291,20 @@ fun MapWidget(
             // once MapWidget leaves composition (e.g. MapNavPanel switching to NAV) this exact
             // instance is gone for good regardless of what we do here — a fresh MapView is
             // created via `remember` if/when MapWidget re-enters composition. Always destroy it
-            // to stop the MapLibre render thread and release the Activity reference; the
-            // `mapState.destroyed` guard prevents a double-destroy if ON_DESTROY already fired.
+            // to release its resources; the `mapState.destroyed` guard prevents a double-destroy.
             if (!mapState.destroyed) { mapState.destroyed = true; mapView.onDestroy() }
         }
     }
 }
 
-private fun poisToGeoJson(pois: List<Poi>): String {
-    val features = pois.joinToString(",") { poi ->
-        val name = (poi.name ?: "").replace("\\", "\\\\").replace("\"", "\\\"")
-        """{"type":"Feature","geometry":{"type":"Point","coordinates":[${poi.lng},${poi.lat}]},"properties":{"icon":"poi-${poi.type.name.lowercase()}","name":"$name"}}"""
+private fun poisToFeatureCollection(pois: List<Poi>): FeatureCollection {
+    val features = pois.map { poi ->
+        Feature.fromGeometry(Point.fromLngLat(poi.lng, poi.lat)).also {
+            it.addStringProperty("icon", "poi-${poi.type.name.lowercase()}")
+            it.addStringProperty("name", poi.name ?: "")
+        }
     }
-    return """{"type":"FeatureCollection","features":[$features]}"""
+    return FeatureCollection.fromFeatures(features)
 }
 
 private fun createPoiIcon(type: PoiType): Bitmap {

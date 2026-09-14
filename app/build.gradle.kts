@@ -102,12 +102,6 @@ dependencies {
     // ML Kit Text Recognition (bundled Latin model — fully offline, no Play Services)
     implementation(libs.mlkit.text.recognition)
 
-    // MapLibre
-    implementation("org.maplibre.gl:android-sdk:11.8.0")
-
-    // PMTiles HTTP server (serves PMTiles file to MapLibre via localhost)
-    implementation("org.nanohttpd:nanohttpd:2.3.1")
-
-    // Mapbox Maps SDK — Fáze 2, nahrazuje MapLibre (odstraní se v dalším tasku, až MapWidget.kt přejde)
+    // Mapbox Maps SDK
     implementation("com.mapbox.maps:android:11.30.1")
 }

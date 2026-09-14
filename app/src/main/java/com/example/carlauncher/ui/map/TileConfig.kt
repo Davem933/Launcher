@@ -1,6 +1,7 @@
 package com.example.carlauncher.ui.map
 
+import com.mapbox.maps.Style
+
 object TileConfig {
-    const val PMTILES_PATH = "/storage/emulated/0/CarLauncher/czech.pmtiles"
-    const val STYLE_ASSET  = "asset://style/map_style_dark.json"
+    const val MAP_STYLE_URI = Style.DARK
 }

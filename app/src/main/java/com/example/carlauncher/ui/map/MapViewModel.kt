@@ -4,7 +4,6 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.carlauncher.data.location.LocationRepository
-import com.example.carlauncher.data.map.PmtilesHttpServer
 import com.example.carlauncher.data.model.Poi
 import com.example.carlauncher.data.model.VehicleDisplayLocation
 import com.example.carlauncher.data.poi.PoiRepository
@@ -16,7 +15,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.io.File
 import javax.inject.Inject
 
 @HiltViewModel
@@ -38,23 +36,9 @@ class MapViewModel @Inject constructor(
     fun setRoutePolyline(points: List<Pair<Double, Double>>) { _routePolyline.value = points }
     fun clearRoutePolyline() { _routePolyline.value = emptyList() }
 
-    private var pmtilesServer: PmtilesHttpServer? = null
-
     private val poiUseCase = PoiUseCase()
 
     init {
-        val file = File(TileConfig.PMTILES_PATH)
-        if (file.exists()) {
-            try {
-                pmtilesServer = PmtilesHttpServer(file).also { it.start() }
-                Log.d("MapViewModel", "PMTiles server started, file=${TileConfig.PMTILES_PATH}")
-            } catch (e: Exception) {
-                Log.e("MapViewModel", "PMTiles server failed: ${e.message}")
-            }
-        } else {
-            Log.w("MapViewModel", "PMTiles file not found: ${TileConfig.PMTILES_PATH}")
-        }
-
         viewModelScope.launch {
             repository.vehicleLocation.collect { fix ->
                 fix ?: return@collect
@@ -69,10 +53,5 @@ class MapViewModel @Inject constructor(
                 }
             }
         }
-    }
-
-    override fun onCleared() {
-        pmtilesServer?.stop()
-        super.onCleared()
     }
 }
