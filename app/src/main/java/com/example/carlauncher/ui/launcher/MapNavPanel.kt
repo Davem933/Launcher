@@ -71,6 +71,7 @@ private fun Modifier.detectPanelLongPress(onLongPress: () -> Unit): Modifier =
                 withTimeout(LONG_PRESS_TIMEOUT_MS) {
                     while (true) {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
+                        if (event.changes.size > 1) return@withTimeout
                         val change = event.changes.firstOrNull { it.id == down.id }
                             ?: return@withTimeout
                         if (!change.pressed) return@withTimeout
@@ -110,7 +111,7 @@ private fun PanelChoiceCard(
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = label,
+            contentDescription = null,
             tint = if (selected) CarColors.Accent else CarColors.Text2,
             modifier = Modifier.size(28.dp),
         )
