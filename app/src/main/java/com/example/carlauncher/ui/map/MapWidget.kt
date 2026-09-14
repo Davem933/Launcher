@@ -1,12 +1,6 @@
 package com.example.carlauncher.ui.map
 
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Paint
-import android.graphics.RectF
 import android.util.Log
-import com.example.carlauncher.data.model.Poi
-import com.example.carlauncher.data.model.PoiType
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
@@ -46,36 +40,22 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.mapbox.geojson.Feature
-import com.mapbox.geojson.FeatureCollection
 import com.mapbox.geojson.Point
 import com.mapbox.maps.CameraOptions
 import com.mapbox.maps.MapInitOptions
 import com.mapbox.maps.MapView
 import com.mapbox.maps.MapboxMap
+import com.mapbox.maps.plugin.PuckBearing
 import com.mapbox.maps.plugin.animation.MapAnimationOptions
 import com.mapbox.maps.plugin.animation.easeTo
 import com.mapbox.maps.plugin.gestures.OnMoveListener
 import com.mapbox.maps.plugin.gestures.gestures
+import com.mapbox.maps.plugin.locationcomponent.createDefault2DPuck
+import com.mapbox.maps.plugin.locationcomponent.location
 import com.mapbox.android.gestures.MoveGestureDetector
-import com.mapbox.maps.extension.style.expressions.dsl.generated.get
-import com.mapbox.maps.extension.style.layers.addLayer
-import com.mapbox.maps.extension.style.layers.generated.SymbolLayer
-import com.mapbox.maps.extension.style.layers.properties.generated.IconRotationAlignment
-import com.mapbox.maps.extension.style.sources.addSource
-import com.mapbox.maps.extension.style.sources.generated.GeoJsonSource
-
-private const val MARKER_IMAGE_ID = "vehicle-marker"
-private const val VEHICLE_SOURCE_ID = "vehicle-source"
-private const val VEHICLE_LAYER_ID = "vehicle-layer"
-
-private const val POI_SOURCE_ID = "poi-source"
-private const val POI_LAYER_ID = "poi-layer"
 
 private class MapState {
     var mapboxMap: MapboxMap? = null
-    var vehicleSource: GeoJsonSource? = null
-    var poiSource: GeoJsonSource? = null
     var destroyed = false
 }
 
@@ -99,6 +79,7 @@ fun MapWidget(
         MapView(context, MapInitOptions(context = context, textureView = true))
     }
     val mapState = remember { MapState() }
+    val locationProvider = remember { AppLocationProvider() }
     var styleLoaded by remember { mutableStateOf(false) }
     var isFollowing by remember { mutableStateOf(true) }
 
@@ -106,11 +87,12 @@ fun MapWidget(
         if (!styleLoaded) return@LaunchedEffect
         val map = mapState.mapboxMap ?: return@LaunchedEffect
 
-        // Race-condition fix: seed source immediately if location already available
+        // Race-condition fix: seed the puck immediately if location already available
         val currentLoc = location
         if (currentLoc != null) {
-            mapState.vehicleSource?.feature(
-                featureWithBearing(currentLoc.lat, currentLoc.lng, currentLoc.bearingDeg)
+            locationProvider.push(
+                Point.fromLngLat(currentLoc.lng, currentLoc.lat),
+                currentLoc.bearingDeg.toDouble()
             )
             map.setCamera(
                 CameraOptions.Builder()
@@ -141,6 +123,19 @@ fun MapWidget(
                     // a signal, the style never loads, so gestures/camera-follow must already be
                     // configured before that point, not gated behind it.
                     mapState.mapboxMap = mapboxMap
+                    // Mapbox's own location puck, fed from our Kalman-filtered/route-snapped
+                    // location instead of Mapbox's default device-GPS provider — no location
+                    // permission needed here since we push updates ourselves.
+                    // `this.` is required here: the composable's own `location` (the GPS
+                    // fix StateFlow value) would otherwise shadow the MapView.location plugin
+                    // extension property of the same name.
+                    this.location.setLocationProvider(locationProvider)
+                    this.location.updateSettings {
+                        enabled = true
+                        puckBearing = PuckBearing.COURSE
+                        puckBearingEnabled = true
+                        locationPuck = createDefault2DPuck(withBearing = true)
+                    }
                     gestures.updateSettings {
                         scrollEnabled = true
                         pinchToZoomEnabled = true
@@ -164,46 +159,8 @@ fun MapWidget(
 
                     // loadStyle() is the current (v11) API — the older loadStyleUri() overloads
                     // are deprecated in favor of this unified loader.
-                    mapboxMap.loadStyle(TileConfig.MAP_STYLE_URI) { style ->
+                    mapboxMap.loadStyle(TileConfig.MAP_STYLE_URI) {
                         Log.d("MapWidget", "Style loaded OK")
-
-                        // POI layer — below vehicle marker
-                        PoiType.entries.forEach { type ->
-                            style.addImage("poi-${type.name.lowercase()}", createPoiIcon(type))
-                        }
-                        val poiSource = GeoJsonSource.Builder(POI_SOURCE_ID).build()
-                        style.addSource(poiSource)
-                        mapState.poiSource = poiSource
-                        style.addLayer(
-                            SymbolLayer(POI_LAYER_ID, POI_SOURCE_ID)
-                                .iconImage(get("icon"))
-                                .iconAllowOverlap(true)
-                                .iconIgnorePlacement(true)
-                                .iconSize(0.8)
-                        )
-                        val pendingPois = viewModel.nearbyPois.value
-                        if (pendingPois.isNotEmpty()) {
-                            poiSource.featureCollection(poisToFeatureCollection(pendingPois))
-                        }
-
-                        // Vehicle marker layer — on top
-                        style.addImage(MARKER_IMAGE_ID, createVehicleMarkerBitmap())
-                        val vehicleSource = GeoJsonSource.Builder(VEHICLE_SOURCE_ID).build()
-                        style.addSource(vehicleSource)
-                        mapState.vehicleSource = vehicleSource
-
-                        // icon-rotate reads "bearing" property from each GeoJSON feature —
-                        // rotation updates without touching the layer style (no style re-evaluation)
-                        style.addLayer(
-                            SymbolLayer(VEHICLE_LAYER_ID, VEHICLE_SOURCE_ID)
-                                .iconImage(MARKER_IMAGE_ID)
-                                .iconSize(0.5)
-                                .iconAllowOverlap(true)
-                                .iconIgnorePlacement(true)
-                                .iconRotationAlignment(IconRotationAlignment.MAP)
-                                .iconRotate(get("bearing"))
-                        )
-
                         styleLoaded = true
                     }
                 }
@@ -246,14 +203,13 @@ fun MapWidget(
     }
 
     LaunchedEffect(location) {
-        val loc    = location ?: return@LaunchedEffect
-        val source = mapState.vehicleSource ?: return@LaunchedEffect
+        val loc = location ?: return@LaunchedEffect
 
         val (snapLat, snapLng) = RouteSnapHelper.snapToRoute(
             loc.lat, loc.lng, viewModel.routePolyline.value
         )
 
-        source.feature(featureWithBearing(snapLat, snapLng, loc.bearingDeg))
+        locationProvider.push(Point.fromLngLat(snapLng, snapLat), loc.bearingDeg.toDouble())
 
         if (isFollowing) {
             mapState.mapboxMap?.easeTo(
@@ -270,12 +226,6 @@ fun MapWidget(
         if (!isFollowing) {
             delay(10_000)
             isFollowing = true
-        }
-    }
-
-    LaunchedEffect("poi") {
-        viewModel.nearbyPois.collect { pois ->
-            mapState.poiSource?.featureCollection(poisToFeatureCollection(pois))
         }
     }
 
@@ -304,89 +254,4 @@ fun MapWidget(
             if (!mapState.destroyed) { mapState.destroyed = true; mapView.onDestroy() }
         }
     }
-}
-
-private fun poisToFeatureCollection(pois: List<Poi>): FeatureCollection {
-    val features = pois.map { poi ->
-        Feature.fromGeometry(Point.fromLngLat(poi.lng, poi.lat)).also {
-            it.addStringProperty("icon", "poi-${poi.type.name.lowercase()}")
-            it.addStringProperty("name", poi.name ?: "")
-        }
-    }
-    return FeatureCollection.fromFeatures(features)
-}
-
-private fun createPoiIcon(type: PoiType): Bitmap {
-    val size = 64
-    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bitmap)
-    val c = size / 2f
-    val r = c - 4f
-    val bgColor = when (type) {
-        PoiType.FUEL       -> android.graphics.Color.parseColor("#22C55E")
-        PoiType.PARKING    -> android.graphics.Color.parseColor("#3B82F6")
-        PoiType.RESTAURANT -> android.graphics.Color.parseColor("#F97316")
-        PoiType.HOSPITAL   -> android.graphics.Color.parseColor("#EF4444")
-    }
-    val label = when (type) {
-        PoiType.FUEL       -> "⛽"
-        PoiType.PARKING    -> "P"
-        PoiType.RESTAURANT -> "☕"
-        PoiType.HOSPITAL   -> "+"
-    }
-    val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = bgColor; style = Paint.Style.FILL }
-    if (type == PoiType.PARKING) canvas.drawRoundRect(RectF(4f, 4f, size - 4f, size - 4f), 10f, 10f, bgPaint)
-    else canvas.drawCircle(c, c, r, bgPaint)
-    val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = android.graphics.Color.WHITE
-        textSize = if (type == PoiType.PARKING || type == PoiType.HOSPITAL) 30f else 22f
-        textAlign = Paint.Align.CENTER
-        isFakeBoldText = true
-    }
-    canvas.drawText(label, c, c - (textPaint.descent() + textPaint.ascent()) / 2f, textPaint)
-    return bitmap
-}
-
-// Encode bearing as GeoJSON feature property so icon-rotate is data-driven.
-// Updating only the source data never triggers a style re-evaluation → no flicker.
-private fun featureWithBearing(lat: Double, lng: Double, bearing: Float): Feature =
-    Feature.fromGeometry(Point.fromLngLat(lng, lat)).also {
-        it.addNumberProperty("bearing", bearing)
-    }
-
-private fun createVehicleMarkerBitmap(): Bitmap {
-    // 128px ≈ 46dp at ~2.75x density — big enough to spot at a glance while driving
-    val size = 128
-    val c = size / 2f
-    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-    val canvas = Canvas(bitmap)
-
-    // Translucent halo
-    Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = android.graphics.Color.parseColor("#40FFFFFF")
-        style = Paint.Style.FILL
-    }.also { canvas.drawCircle(c, c, 60f, it) }
-
-    // Green disc
-    Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = android.graphics.Color.parseColor("#22C55E")
-        style = Paint.Style.FILL
-    }.also { canvas.drawCircle(c, c, 40f, it) }
-
-    // White direction wedge pointing north (iconRotate aligns it to bearing)
-    Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = android.graphics.Color.WHITE
-        style = Paint.Style.FILL
-    }.also {
-        val path = android.graphics.Path().apply {
-            moveTo(c, c - 28f)        // tip
-            lineTo(c - 16f, c + 14f)  // bottom left
-            lineTo(c, c + 4f)         // notch
-            lineTo(c + 16f, c + 14f)  // bottom right
-            close()
-        }
-        canvas.drawPath(path, it)
-    }
-
-    return bitmap
 }
