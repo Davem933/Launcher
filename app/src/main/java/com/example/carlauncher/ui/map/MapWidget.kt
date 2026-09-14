@@ -54,6 +54,16 @@ import com.mapbox.maps.plugin.gestures.gestures
 import com.mapbox.maps.plugin.locationcomponent.createDefault2DPuck
 import com.mapbox.maps.plugin.locationcomponent.location
 import com.mapbox.android.gestures.MoveGestureDetector
+import com.mapbox.maps.extension.style.expressions.generated.Expression
+import com.mapbox.maps.extension.style.layers.addLayer
+import com.mapbox.maps.extension.style.layers.generated.LineLayer
+import com.mapbox.maps.extension.style.layers.properties.generated.LineCap
+import com.mapbox.maps.extension.style.layers.properties.generated.LineJoin
+import com.mapbox.maps.extension.style.sources.addSource
+import com.mapbox.maps.extension.style.sources.generated.VectorSource
+
+private const val TRAFFIC_SOURCE_ID = "traffic-source"
+private const val TRAFFIC_LAYER_ID = "traffic-congestion"
 
 private class MapState {
     var mapboxMap: MapboxMap? = null
@@ -173,6 +183,44 @@ fun MapWidget(
                         style.setStyleImportConfigProperty(
                             TileConfig.STANDARD_IMPORT_ID, "show3dObjects", Value.valueOf(true)
                         )
+
+                        // Live traffic congestion coloring — Standard has no built-in traffic,
+                        // unlike the classic TRAFFIC_NIGHT style, so it's layered on manually
+                        // from Mapbox's traffic tileset (same source the classic style uses).
+                        style.addSource(
+                            VectorSource.Builder(TRAFFIC_SOURCE_ID)
+                                .url("mapbox://mapbox.mapbox-traffic-v1")
+                                .build()
+                        )
+                        style.addLayer(
+                            LineLayer(TRAFFIC_LAYER_ID, TRAFFIC_SOURCE_ID)
+                                .sourceLayer("traffic")
+                                .lineCap(LineCap.ROUND)
+                                .lineJoin(LineJoin.ROUND)
+                                .lineColor(
+                                    Expression.match(
+                                        input = Expression.get("congestion"),
+                                        stops = arrayOf(
+                                            Expression.literal("low") to Expression.rgb(57.0, 198.0, 109.0),
+                                            Expression.literal("moderate") to Expression.rgb(255.0, 140.0, 26.0),
+                                            Expression.literal("heavy") to Expression.rgb(255.0, 0.0, 21.0),
+                                            Expression.literal("severe") to Expression.rgb(152.0, 27.0, 37.0),
+                                        ),
+                                        fallback = Expression.rgba(0.0, 0.0, 0.0, 0.0)
+                                    )
+                                )
+                                .lineWidth(
+                                    Expression.exponentialInterpolator(
+                                        1.5,
+                                        Expression.zoom(),
+                                        Expression.literal(10.0) to Expression.literal(1.0),
+                                        Expression.literal(15.0) to Expression.literal(4.0),
+                                        Expression.literal(20.0) to Expression.literal(14.0)
+                                    )
+                                )
+                                .slot("middle")
+                        )
+
                         styleLoaded = true
                     }
                 }
