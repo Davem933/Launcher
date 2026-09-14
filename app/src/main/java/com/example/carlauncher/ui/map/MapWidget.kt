@@ -40,6 +40,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.mapbox.bindgen.Value
 import com.mapbox.geojson.Point
 import com.mapbox.maps.CameraOptions
 import com.mapbox.maps.MapInitOptions
@@ -98,6 +99,7 @@ fun MapWidget(
                 CameraOptions.Builder()
                     .center(Point.fromLngLat(currentLoc.lng, currentLoc.lat))
                     .zoom(17.5)
+                    .pitch(45.0)
                     .build()
             )
         } else {
@@ -105,6 +107,7 @@ fun MapWidget(
                 CameraOptions.Builder()
                     .center(Point.fromLngLat(14.4378, 50.0755))
                     .zoom(17.5)
+                    .pitch(45.0)
                     .build()
             )
         }
@@ -139,8 +142,8 @@ fun MapWidget(
                     gestures.updateSettings {
                         scrollEnabled = true
                         pinchToZoomEnabled = true
-                        rotateEnabled = false
-                        pitchEnabled = false
+                        rotateEnabled = true
+                        pitchEnabled = true
                     }
                     // Detect user touch to pause auto-follow — mirrors the old
                     // "reason == REASON_GESTURE" check from the previous map engine's camera listener.
@@ -159,8 +162,17 @@ fun MapWidget(
 
                     // loadStyle() is the current (v11) API — the older loadStyleUri() overloads
                     // are deprecated in favor of this unified loader.
-                    mapboxMap.loadStyle(TileConfig.MAP_STYLE_URI) {
+                    mapboxMap.loadStyle(TileConfig.MAP_STYLE_URI) { style ->
                         Log.d("MapWidget", "Style loaded OK")
+                        // Standard style config — dark theme always, so pin the night light
+                        // preset rather than following real-world time of day, and make sure
+                        // 3D buildings/landmarks render (the point of switching to Standard).
+                        style.setStyleImportConfigProperty(
+                            TileConfig.STANDARD_IMPORT_ID, "lightPreset", Value.valueOf("night")
+                        )
+                        style.setStyleImportConfigProperty(
+                            TileConfig.STANDARD_IMPORT_ID, "show3dObjects", Value.valueOf(true)
+                        )
                         styleLoaded = true
                     }
                 }
