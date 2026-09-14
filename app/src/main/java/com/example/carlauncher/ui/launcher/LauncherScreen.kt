@@ -29,7 +29,6 @@ import com.example.carlauncher.debug.DebugPanel
 import com.example.carlauncher.debug.GpsDebugOverlay
 import com.example.carlauncher.ui.dock.DockBar
 import com.example.carlauncher.ui.dock.DockViewModel
-import com.example.carlauncher.ui.navigation.NavAreaWidget
 import com.example.carlauncher.ui.music.MusicWidget
 import com.example.carlauncher.ui.theme.CarColors
 import com.example.carlauncher.ui.launcher.WeatherCalendarWidget
@@ -73,8 +72,8 @@ fun LauncherScreen(
                     .padding(horizontal = 12.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Left — nav area ~65% width
-                NavAreaWidget(
+                // Left — map/nav area ~65% width, long-press to switch (MapNavPanel)
+                MapNavPanel(
                     speedKmh = location?.speedKmh ?: 0f,
                     speedLimitKmh = speedLimit,
                     modifier = Modifier
