@@ -13,7 +13,7 @@ val localProps = Properties().apply {
     val f = rootProject.file("local.properties")
     if (f.exists()) f.inputStream().use { load(it) }
 }
-val mapyczApiKey: String = localProps.getProperty("MAPYCZ_API_KEY", "MAPY_API_KEY_HERE")
+val mapboxAccessToken: String = localProps.getProperty("MAPBOX_ACCESS_TOKEN", "MAPBOX_TOKEN_HERE")
 
 // Incident Recorder feature toggle — disable locally with INCIDENT_RECORDER_ENABLED=false
 val incidentRecorderEnabled: String = localProps.getProperty("INCIDENT_RECORDER_ENABLED", "true")
@@ -29,7 +29,7 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        buildConfigField("String", "MAPYCZ_API_KEY", "\"$mapyczApiKey\"")
+        buildConfigField("String", "MAPBOX_ACCESS_TOKEN", "\"$mapboxAccessToken\"")
         buildConfigField("boolean", "INCIDENT_RECORDER_ENABLED", incidentRecorderEnabled)
     }
 
@@ -107,4 +107,7 @@ dependencies {
 
     // PMTiles HTTP server (serves PMTiles file to MapLibre via localhost)
     implementation("org.nanohttpd:nanohttpd:2.3.1")
+
+    // Mapbox Maps SDK — Fáze 2, nahrazuje MapLibre (odstraní se v dalším tasku, až MapWidget.kt přejde)
+    implementation("com.mapbox.maps:android:11.30.1")
 }
