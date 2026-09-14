@@ -8,11 +8,6 @@
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.READ_CALENDAR" />
-    <!-- Read PMTiles file from shared external storage (API 31-32) -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="32" />
-    <!-- Full file access for PMTiles on API 33+ (scoped storage exemption) -->
-    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
     <!-- Incident Recorder — manual dashcam video capture -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
@@ -25,8 +20,7 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.CarLauncher"
-        android:usesCleartextTraffic="true">
+        android:theme="@style/Theme.CarLauncher">
 
         <activity
             android:name=".MainActivity"

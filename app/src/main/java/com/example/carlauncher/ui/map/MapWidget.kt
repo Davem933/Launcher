@@ -136,11 +136,36 @@ fun MapWidget(
         AndroidView(
             factory = {
                 mapView.apply {
+                    // Map-level setup — must not live inside the style-load callback below,
+                    // since that callback only fires on a successful (online) style load. Without
+                    // a signal, the style never loads, so gestures/camera-follow must already be
+                    // configured before that point, not gated behind it.
+                    mapState.mapboxMap = mapboxMap
+                    gestures.updateSettings {
+                        scrollEnabled = true
+                        pinchToZoomEnabled = true
+                        rotateEnabled = false
+                        pitchEnabled = false
+                    }
+                    // Detect user touch to pause auto-follow — mirrors the old
+                    // "reason == REASON_GESTURE" check from the previous map engine's camera listener.
+                    gestures.addOnMoveListener(object : OnMoveListener {
+                        override fun onMoveBegin(detector: MoveGestureDetector) {
+                            isFollowing = false
+                        }
+                        override fun onMove(detector: MoveGestureDetector): Boolean = false
+                        override fun onMoveEnd(detector: MoveGestureDetector) {}
+                    })
+                    // Style fetch is online-only (no offline fallback in this phase) — log failures
+                    // so a no-signal black map is diagnosable instead of silently inert.
+                    mapboxMap.subscribeMapLoadingError { error ->
+                        Log.e("MapWidget", "Style load failed: $error")
+                    }
+
                     // loadStyle() is the current (v11) API — the older loadStyleUri() overloads
                     // are deprecated in favor of this unified loader.
                     mapboxMap.loadStyle(TileConfig.MAP_STYLE_URI) { style ->
                         Log.d("MapWidget", "Style loaded OK")
-                        mapState.mapboxMap = mapboxMap
 
                         // POI layer — below vehicle marker
                         PoiType.entries.forEach { type ->
@@ -178,22 +203,6 @@ fun MapWidget(
                                 .iconRotationAlignment(IconRotationAlignment.MAP)
                                 .iconRotate(get("bearing"))
                         )
-
-                        gestures.updateSettings {
-                            scrollEnabled = true
-                            pinchToZoomEnabled = true
-                            rotateEnabled = false
-                            pitchEnabled = false
-                        }
-                        // Detect user touch to pause auto-follow — mirrors the old
-                        // "reason == REASON_GESTURE" check from the previous map engine's camera listener.
-                        gestures.addOnMoveListener(object : OnMoveListener {
-                            override fun onMoveBegin(detector: MoveGestureDetector) {
-                                isFollowing = false
-                            }
-                            override fun onMove(detector: MoveGestureDetector): Boolean = false
-                            override fun onMoveEnd(detector: MoveGestureDetector) {}
-                        })
 
                         styleLoaded = true
                     }
