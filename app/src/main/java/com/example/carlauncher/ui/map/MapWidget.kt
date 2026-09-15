@@ -5,21 +5,26 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.util.Log
 import com.example.carlauncher.data.model.Parking
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.foundation.border
 import androidx.compose.ui.Alignment
@@ -46,16 +51,20 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.mapbox.bindgen.ExpectedFactory
 import com.mapbox.bindgen.Value
+import com.mapbox.common.location.Location
 import com.mapbox.geojson.Feature
 import com.mapbox.geojson.FeatureCollection
 import com.mapbox.geojson.Point
 import com.mapbox.maps.CameraOptions
+import com.mapbox.maps.EdgeInsets
 import com.mapbox.maps.MapInitOptions
 import com.mapbox.maps.MapView
 import com.mapbox.maps.MapboxMap
 import com.mapbox.maps.plugin.PuckBearing
 import com.mapbox.maps.plugin.animation.MapAnimationOptions
+import com.mapbox.maps.plugin.animation.camera
 import com.mapbox.maps.plugin.animation.easeTo
 import com.mapbox.maps.plugin.gestures.OnMoveListener
 import com.mapbox.maps.plugin.gestures.gestures
@@ -72,14 +81,36 @@ import com.mapbox.maps.extension.style.sources.addSource
 import com.mapbox.maps.extension.style.sources.generated.GeoJsonSource
 import com.mapbox.maps.extension.style.sources.generated.VectorSource
 import com.mapbox.api.directions.v5.models.RouteOptions
+import com.mapbox.navigation.base.TimeFormat
 import com.mapbox.navigation.base.extensions.applyDefaultNavigationOptions
 import com.mapbox.navigation.base.extensions.applyLanguageAndVoiceUnitOptions
+import com.mapbox.navigation.base.formatter.DistanceFormatterOptions
 import com.mapbox.navigation.base.route.NavigationRoute
 import com.mapbox.navigation.base.route.NavigationRouterCallback
 import com.mapbox.navigation.base.route.RouterFailure
 import com.mapbox.navigation.core.directions.session.RoutesObserver
+import com.mapbox.navigation.core.formatter.MapboxDistanceFormatter
 import com.mapbox.navigation.core.lifecycle.MapboxNavigationApp
 import com.mapbox.navigation.core.lifecycle.requireMapboxNavigation
+import com.mapbox.navigation.core.trip.session.LocationMatcherResult
+import com.mapbox.navigation.core.trip.session.LocationObserver
+import com.mapbox.navigation.core.trip.session.RouteProgressObserver
+import com.mapbox.navigation.core.trip.session.TripSessionState
+import com.mapbox.navigation.tripdata.maneuver.api.MapboxManeuverApi
+import com.mapbox.navigation.tripdata.maneuver.model.Maneuver
+import com.mapbox.navigation.tripdata.progress.api.MapboxTripProgressApi
+import com.mapbox.navigation.tripdata.progress.model.DistanceRemainingFormatter
+import com.mapbox.navigation.tripdata.progress.model.EstimatedTimeOfArrivalFormatter
+import com.mapbox.navigation.tripdata.progress.model.PercentDistanceTraveledFormatter
+import com.mapbox.navigation.tripdata.progress.model.TimeRemainingFormatter
+import com.mapbox.navigation.tripdata.progress.model.TripProgressUpdateFormatter
+import com.mapbox.navigation.tripdata.progress.model.TripProgressUpdateValue
+import com.mapbox.navigation.ui.components.maneuver.view.MapboxManeuverView
+import com.mapbox.navigation.ui.components.tripprogress.view.MapboxTripProgressView
+import com.mapbox.navigation.ui.maps.camera.NavigationCamera
+import com.mapbox.navigation.ui.maps.camera.data.MapboxNavigationViewportDataSource
+import com.mapbox.navigation.ui.maps.camera.lifecycle.NavigationBasicGesturesHandler
+import com.mapbox.navigation.ui.maps.location.NavigationLocationProvider
 import com.mapbox.navigation.ui.maps.route.line.api.MapboxRouteLineApi
 import com.mapbox.navigation.ui.maps.route.line.api.MapboxRouteLineView
 import com.mapbox.navigation.ui.maps.route.line.model.MapboxRouteLineApiOptions
@@ -96,6 +127,11 @@ private class MapState {
     var mapboxMap: MapboxMap? = null
     var parkingSource: GeoJsonSource? = null
     var destroyed = false
+    // Task 4: Navigation SDK's own camera system, created once at map-creation time (see the
+    // mapView.apply{} block) and read from LaunchedEffect(isNavigating)/observers below. Plain
+    // remembered fields, not Compose State — same rationale as mapboxMap/parkingSource above.
+    var navigationCamera: NavigationCamera? = null
+    var viewportDataSource: MapboxNavigationViewportDataSource? = null
 }
 
 // Tracks the in-flight requestRoutes() call so a newer destination selection can cancel a
@@ -166,6 +202,49 @@ fun MapWidget(
     var routeRequestError by remember { mutableStateOf<String?>(null) }
     val routeRequestState = remember { RouteRequestState() }
 
+    // Task 4: whether active turn-by-turn guidance is running. Deliberately NOT defaulted to
+    // false — MapboxNavigation's trip session lives outside this composable's own lifetime
+    // (it's tied to the Activity via MapboxNavigationApp/requireMapboxNavigation, see the
+    // long comment above), so switching MapNavPanel away from Map and back tears down and
+    // recreates this whole composable while guidance keeps running underneath. Deriving the
+    // initial value from mapboxNavigation.getTripSessionState() (instead of blindly starting
+    // in free-drive) is what makes the free-drive UI correctly NOT reappear over a still-active
+    // trip session. Verified against the SDK source (MapboxNavigation.kt, navigationcore
+    // 3.30.1 pinned in this project): `fun getTripSessionState(): TripSessionState =
+    // tripSession.getState()`, STARTED while a session (foreground service + location updates)
+    // is active, STOPPED otherwise — exactly the signal needed here.
+    var isNavigating by remember {
+        mutableStateOf(mapboxNavigation.getTripSessionState() == TripSessionState.STARTED)
+    }
+    // Repopulated by routeProgressObserver below. Left null (not emptyList()/an empty progress
+    // object) until the first RouteProgress arrives after (re)registering, so the maneuver
+    // banner/trip progress views simply don't render (see the `?.let` usage further down)
+    // instead of flashing empty content — including right after a panel-switch-back while
+    // isNavigating restores to true from the check above.
+    var currentManeuvers by remember { mutableStateOf<List<Maneuver>?>(null) }
+    var currentTripProgress by remember { mutableStateOf<TripProgressUpdateValue?>(null) }
+
+    // Mapbox's own LocationProvider implementation, fed exclusively by locationObserver below
+    // (route-matched/enhanced locations from the Navigation SDK's own trip session) — swapped
+    // in as the map's active puck source only while isNavigating, see LaunchedEffect(isNavigating).
+    val navigationLocationProvider = remember { NavigationLocationProvider() }
+    val distanceFormatterOptions = remember { DistanceFormatterOptions.Builder(context).build() }
+    val maneuverApi = remember {
+        MapboxManeuverApi(MapboxDistanceFormatter(distanceFormatterOptions))
+    }
+    val tripProgressApi = remember {
+        MapboxTripProgressApi(
+            TripProgressUpdateFormatter.Builder(context)
+                .distanceRemainingFormatter(DistanceRemainingFormatter(distanceFormatterOptions))
+                .timeRemainingFormatter(TimeRemainingFormatter(context))
+                .percentRouteTraveledFormatter(PercentDistanceTraveledFormatter())
+                .estimatedTimeOfArrivalFormatter(
+                    EstimatedTimeOfArrivalFormatter(context, TimeFormat.NONE_SPECIFIED)
+                )
+                .build()
+        )
+    }
+
     LaunchedEffect(routeRequestError) {
         if (routeRequestError == null) return@LaunchedEffect
         delay(4000)
@@ -183,15 +262,56 @@ fun MapWidget(
                 routeLineApi.clearRouteLine { value ->
                     style?.let { routeLineView.renderClearRouteLineValue(it, value) }
                 }
+                // Task 4: drop the route from camera-frame evaluation too — mirrors the
+                // reference app's routesObserver (JetpackComposeActivity.kt).
+                mapState.viewportDataSource?.clearRouteData()
+                mapState.viewportDataSource?.evaluate()
             } else {
                 routeLineApi.setNavigationRoutes(routeUpdateResult.navigationRoutes) { value ->
                     style?.let { routeLineView.renderRouteDrawData(it, value) }
                 }
+                mapState.viewportDataSource?.onRouteChanged(routeUpdateResult.navigationRoutes.first())
+                mapState.viewportDataSource?.evaluate()
             }
         }
         mapboxNavigation.registerRoutesObserver(routesObserver)
         onDispose {
             mapboxNavigation.unregisterRoutesObserver(routesObserver)
+        }
+    }
+
+    // Task 4: feeds the Navigation SDK's own puck (navigationLocationProvider) and camera
+    // (viewportDataSource) while a trip session is running, and updates the maneuver banner /
+    // trip progress overlays. Registered for this composable's lifetime, same rationale as the
+    // routesObserver DisposableEffect above (MapWidget isn't a class, so it can't host these as
+    // requireMapboxNavigation()'s onResumedObserver members the way the reference Activity does).
+    DisposableEffect(mapboxNavigation, maneuverApi, tripProgressApi, navigationLocationProvider) {
+        val locationObserver = object : LocationObserver {
+            override fun onNewRawLocation(rawLocation: Location) {
+                // Not used — the enhanced/map-matched location below is what drives the puck
+                // and camera, same as the reference app.
+            }
+            override fun onNewLocationMatcherResult(locationMatcherResult: LocationMatcherResult) {
+                val enhancedLocation = locationMatcherResult.enhancedLocation
+                navigationLocationProvider.changePosition(
+                    location = enhancedLocation,
+                    keyPoints = locationMatcherResult.keyPoints,
+                )
+                mapState.viewportDataSource?.onLocationChanged(enhancedLocation)
+                mapState.viewportDataSource?.evaluate()
+            }
+        }
+        val routeProgressObserver = RouteProgressObserver { routeProgress ->
+            mapState.viewportDataSource?.onRouteProgressChanged(routeProgress)
+            mapState.viewportDataSource?.evaluate()
+            currentManeuvers = maneuverApi.getManeuvers(routeProgress).getValueOrElse { emptyList() }
+            currentTripProgress = tripProgressApi.getTripProgress(routeProgress)
+        }
+        mapboxNavigation.registerLocationObserver(locationObserver)
+        mapboxNavigation.registerRouteProgressObserver(routeProgressObserver)
+        onDispose {
+            mapboxNavigation.unregisterLocationObserver(locationObserver)
+            mapboxNavigation.unregisterRouteProgressObserver(routeProgressObserver)
         }
     }
 
@@ -265,6 +385,29 @@ fun MapWidget(
                         override fun onMove(detector: MoveGestureDetector): Boolean = false
                         override fun onMoveEnd(detector: MoveGestureDetector) {}
                     })
+
+                    // Task 4: Navigation SDK's own camera system — set up alongside the puck
+                    // above (map-creation time, not inside the loadStyle callback below, for the
+                    // same reason documented on this block: loadStyle's callback only fires on a
+                    // successful online load). Stays inert (IDLE) until isNavigating flips true
+                    // (see LaunchedEffect(isNavigating) further down), so it never fights the
+                    // existing easeTo/isFollowing free-drive logic while not navigating.
+                    val viewportDataSource = MapboxNavigationViewportDataSource(mapboxMap)
+                    mapState.viewportDataSource = viewportDataSource
+                    val navigationCamera = NavigationCamera(mapboxMap, camera, viewportDataSource)
+                    mapState.navigationCamera = navigationCamera
+                    // Stops NavigationCamera's own following/overview state automatically when
+                    // the user manually pans/zooms/rotates the map, same as the reference app.
+                    camera.addCameraAnimationsLifecycleListener(
+                        NavigationBasicGesturesHandler(navigationCamera)
+                    )
+                    val density = context.resources.displayMetrics.density
+                    viewportDataSource.followingPadding = EdgeInsets(
+                        140.0 * density,
+                        24.0 * density,
+                        110.0 * density,
+                        24.0 * density,
+                    )
                     // Style fetch is online-only (no offline fallback in this phase) — log failures
                     // so a no-signal black map is diagnosable instead of silently inert.
                     mapboxMap.subscribeMapLoadingError { error ->
@@ -359,86 +502,144 @@ fun MapWidget(
                 .padding(start = 18.dp, bottom = 18.dp)
         )
 
-        // Always-visible destination search — matches the reference app's
-        // search-bar-over-map convention. onDestinationSelected requests a route from the
-        // current GPS fix to the chosen point; the routesObserver above draws it once ready.
-        // Starting guidance (startTripSession()) is out of scope here — that's Task 4.
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            DestinationSearchBar(
-                currentLocation = location,
-                onDestinationSelected = { point, _ ->
-                    val currentLoc = location
-                    if (currentLoc == null) {
-                        routeRequestError = "Poloha není dostupná"
-                        return@DestinationSearchBar
-                    }
-                    routeRequestError = null
-                    // Cancel any still-pending request from a previous destination pick so its
-                    // callback can't land after (and overwrite) this newer one's route.
-                    routeRequestState.activeRequestId?.let { mapboxNavigation.cancelRouteRequest(it) }
-                    // The callback needs to know which request it belongs to so it can tell
-                    // whether it's still the authoritative (most recent) one by the time it
-                    // fires — requestRoutes() only returns that id after being called, so the
-                    // callback captures this mutable holder and it's filled in right after.
-                    // A chain of 3+ rapid selections can otherwise let a stale callback (e.g.
-                    // request B's onCanceled, fired as a side effect of cancelling B for C) wipe
-                    // out activeRequestId while it actually holds a newer request's id (C's),
-                    // untracking it — or worse, let a stale onRoutesReady call
-                    // setNavigationRoutes() with an outdated route after a newer one already
-                    // rendered. Comparing against activeRequestId before acting closes both.
-                    val ownRequestId = LongHolder()
-                    val callback = object : NavigationRouterCallback {
-                        override fun onCanceled(routeOptions: RouteOptions, routerOrigin: String) {
-                            if (routeRequestState.activeRequestId == ownRequestId.value) {
-                                routeRequestState.activeRequestId = null
+        // Destination search — matches the reference app's search-bar-over-map convention.
+        // Hidden while isNavigating: the maneuver banner below occupies the same TopCenter
+        // overlay slot, and showing both stacked at once would look broken. It's the entry
+        // point for free-drive only; once guidance starts, the maneuver banner is the
+        // equivalent top overlay (design spec's free-drive vs. active-navigation split).
+        if (!isNavigating) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                DestinationSearchBar(
+                    currentLocation = location,
+                    onDestinationSelected = { point, _ ->
+                        val currentLoc = location
+                        if (currentLoc == null) {
+                            routeRequestError = "Poloha není dostupná"
+                            return@DestinationSearchBar
+                        }
+                        routeRequestError = null
+                        // Cancel any still-pending request from a previous destination pick so its
+                        // callback can't land after (and overwrite) this newer one's route.
+                        routeRequestState.activeRequestId?.let { mapboxNavigation.cancelRouteRequest(it) }
+                        // The callback needs to know which request it belongs to so it can tell
+                        // whether it's still the authoritative (most recent) one by the time it
+                        // fires — requestRoutes() only returns that id after being called, so the
+                        // callback captures this mutable holder and it's filled in right after.
+                        // A chain of 3+ rapid selections can otherwise let a stale callback (e.g.
+                        // request B's onCanceled, fired as a side effect of cancelling B for C) wipe
+                        // out activeRequestId while it actually holds a newer request's id (C's),
+                        // untracking it — or worse, let a stale onRoutesReady call
+                        // setNavigationRoutes() with an outdated route after a newer one already
+                        // rendered. Comparing against activeRequestId before acting closes both.
+                        val ownRequestId = LongHolder()
+                        val callback = object : NavigationRouterCallback {
+                            override fun onCanceled(routeOptions: RouteOptions, routerOrigin: String) {
+                                if (routeRequestState.activeRequestId == ownRequestId.value) {
+                                    routeRequestState.activeRequestId = null
+                                }
+                            }
+                            override fun onFailure(reasons: List<RouterFailure>, routeOptions: RouteOptions) {
+                                if (routeRequestState.activeRequestId == ownRequestId.value) {
+                                    routeRequestState.activeRequestId = null
+                                    Log.e("MapWidget", "Route request failed: $reasons")
+                                    routeRequestError = "Trasu se nepodařilo najít"
+                                }
+                            }
+                            override fun onRoutesReady(routes: List<NavigationRoute>, routerOrigin: String) {
+                                // Only apply this result — and only clear the tracked id — if no
+                                // newer request has since taken ownership of activeRequestId. A
+                                // superseded (stale) result must never overwrite a newer route.
+                                if (routeRequestState.activeRequestId == ownRequestId.value) {
+                                    routeRequestState.activeRequestId = null
+                                    mapboxNavigation.setNavigationRoutes(routes)
+                                    // Task 4: this plan has no separate route-preview/"Start" step —
+                                    // guidance begins immediately once a route is ready (spec §3 flow).
+                                    mapboxNavigation.startTripSession()
+                                    isNavigating = true
+                                }
                             }
                         }
-                        override fun onFailure(reasons: List<RouterFailure>, routeOptions: RouteOptions) {
-                            if (routeRequestState.activeRequestId == ownRequestId.value) {
-                                routeRequestState.activeRequestId = null
-                                Log.e("MapWidget", "Route request failed: $reasons")
-                                routeRequestError = "Trasu se nepodařilo najít"
-                            }
-                        }
-                        override fun onRoutesReady(routes: List<NavigationRoute>, routerOrigin: String) {
-                            // Only apply this result — and only clear the tracked id — if no
-                            // newer request has since taken ownership of activeRequestId. A
-                            // superseded (stale) result must never overwrite a newer route.
-                            if (routeRequestState.activeRequestId == ownRequestId.value) {
-                                routeRequestState.activeRequestId = null
-                                mapboxNavigation.setNavigationRoutes(routes)
-                            }
-                        }
-                    }
-                    val requestId = mapboxNavigation.requestRoutes(
-                        RouteOptions.builder()
-                            .applyDefaultNavigationOptions()
-                            .applyLanguageAndVoiceUnitOptions(context)
-                            .coordinatesList(
-                                listOf(
-                                    Point.fromLngLat(currentLoc.lng, currentLoc.lat),
-                                    point
+                        val requestId = mapboxNavigation.requestRoutes(
+                            RouteOptions.builder()
+                                .applyDefaultNavigationOptions()
+                                .applyLanguageAndVoiceUnitOptions(context)
+                                .coordinatesList(
+                                    listOf(
+                                        Point.fromLngLat(currentLoc.lng, currentLoc.lat),
+                                        point
+                                    )
                                 )
-                            )
-                            .build(),
-                        callback
+                                .build(),
+                            callback
+                        )
+                        ownRequestId.value = requestId
+                        routeRequestState.activeRequestId = requestId
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (routeRequestError != null) {
+                    Text(
+                        text = routeRequestError.orEmpty(),
+                        color = CarColors.Danger,
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(top = 8.dp, start = 4.dp)
                     )
-                    ownRequestId.value = requestId
-                    routeRequestState.activeRequestId = requestId
+                }
+            }
+        }
+
+        // Active turn-by-turn overlays — maneuver banner (TopCenter, replaces the search bar
+        // above) and trip progress (BottomCenter), fed by routeProgressObserver above. Each is
+        // gated on its own `?.let` rather than isNavigating alone, so it simply doesn't render
+        // until the first RouteProgress arrives (including right after a panel-switch-back —
+        // see the isNavigating remember{} comment for why that can start true immediately).
+        if (isNavigating) {
+            currentManeuvers?.let { maneuvers ->
+                AndroidView(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    factory = { MapboxManeuverView(it) },
+                    update = { view -> view.renderManeuvers(ExpectedFactory.createValue(maneuvers)) }
+                )
+            }
+            currentTripProgress?.let { progress ->
+                AndroidView(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(64.dp),
+                    factory = { MapboxTripProgressView(it) },
+                    update = { view -> view.render(progress) }
+                )
+            }
+            // Ukončit — ends active Mapbox guidance and restores Fáze 2's free-drive default
+            // (this is a completely separate control from NavWidget's own "Ukončit", which
+            // ends the unrelated notification-based navigation panel).
+            IconButton(
+                onClick = {
+                    mapboxNavigation.stopTripSession()
+                    mapboxNavigation.setNavigationRoutes(emptyList())
+                    currentManeuvers = null
+                    currentTripProgress = null
+                    isNavigating = false
                 },
-                modifier = Modifier.fillMaxWidth()
-            )
-            if (routeRequestError != null) {
-                Text(
-                    text = routeRequestError.orEmpty(),
-                    color = CarColors.Danger,
-                    fontSize = 14.sp,
-                    modifier = Modifier.padding(top = 8.dp, start = 4.dp)
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(18.dp)
+                    .clip(CircleShape)
+                    .background(CarColors.Surface2)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Ukončit navigaci",
+                    tint = CarColors.Text
                 )
             }
         }
@@ -478,13 +679,32 @@ fun MapWidget(
 
         locationProvider.push(Point.fromLngLat(snapLng, snapLat), loc.bearingDeg.toDouble())
 
-        if (isFollowing) {
+        // Task 4: gated on !isNavigating — while active guidance is running, the Navigation
+        // SDK's own NavigationCamera (fed by viewportDataSource in the locationObserver/
+        // routeProgressObserver above) drives the camera instead, so this free-drive follow
+        // logic must stand down rather than fight it for control every location update.
+        if (isFollowing && !isNavigating) {
             mapState.mapboxMap?.easeTo(
                 CameraOptions.Builder()
                     .center(Point.fromLngLat(snapLng, snapLat))
                     .build(),
                 MapAnimationOptions.mapAnimationOptions { duration(500) }
             )
+        }
+    }
+
+    // Task 4: swap the map's active puck source and camera-follow ownership when guidance
+    // starts/ends. `mapView.location` here is unambiguous (unlike inside the mapView.apply{}
+    // block above) since there's no implicit `this` receiver in this scope to be shadowed by
+    // the composable's own `location` (GPS fix) val — `mapView.location` always resolves to
+    // the MapView.location plugin extension property regardless.
+    LaunchedEffect(isNavigating) {
+        if (isNavigating) {
+            mapView.location.setLocationProvider(navigationLocationProvider)
+            mapState.navigationCamera?.requestNavigationCameraToFollowing()
+        } else {
+            mapView.location.setLocationProvider(locationProvider)
+            mapState.navigationCamera?.requestNavigationCameraToIdle()
         }
     }
 
