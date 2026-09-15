@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -266,6 +267,19 @@ fun MapWidget(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(start = 18.dp, bottom = 18.dp)
+        )
+
+        // Always-visible destination search — matches the reference app's
+        // search-bar-over-map convention. Task 3 wires onDestinationSelected to route requesting.
+        DestinationSearchBar(
+            currentLocation = location,
+            onDestinationSelected = { point, name ->
+                Log.d("MapWidget", "Destination selected: $name @ $point")
+            },
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .padding(16.dp)
         )
 
         // Navigovat — primary CTA, bottom-right corner of the map
