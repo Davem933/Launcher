@@ -107,6 +107,14 @@ private class RouteRequestState {
     var activeRequestId: Long? = null
 }
 
+// Lets a NavigationRouterCallback close over "the request id this specific callback instance
+// is for" even though requestRoutes() only returns that id after the call (and thus after the
+// callback object already exists) — filled in immediately once known, read only from callbacks
+// that fire later on the main thread.
+private class LongHolder {
+    var value: Long? = null
+}
+
 @Composable
 fun MapWidget(
     modifier: Modifier = Modifier,
@@ -373,7 +381,41 @@ fun MapWidget(
                     // Cancel any still-pending request from a previous destination pick so its
                     // callback can't land after (and overwrite) this newer one's route.
                     routeRequestState.activeRequestId?.let { mapboxNavigation.cancelRouteRequest(it) }
-                    routeRequestState.activeRequestId = mapboxNavigation.requestRoutes(
+                    // The callback needs to know which request it belongs to so it can tell
+                    // whether it's still the authoritative (most recent) one by the time it
+                    // fires — requestRoutes() only returns that id after being called, so the
+                    // callback captures this mutable holder and it's filled in right after.
+                    // A chain of 3+ rapid selections can otherwise let a stale callback (e.g.
+                    // request B's onCanceled, fired as a side effect of cancelling B for C) wipe
+                    // out activeRequestId while it actually holds a newer request's id (C's),
+                    // untracking it — or worse, let a stale onRoutesReady call
+                    // setNavigationRoutes() with an outdated route after a newer one already
+                    // rendered. Comparing against activeRequestId before acting closes both.
+                    val ownRequestId = LongHolder()
+                    val callback = object : NavigationRouterCallback {
+                        override fun onCanceled(routeOptions: RouteOptions, routerOrigin: String) {
+                            if (routeRequestState.activeRequestId == ownRequestId.value) {
+                                routeRequestState.activeRequestId = null
+                            }
+                        }
+                        override fun onFailure(reasons: List<RouterFailure>, routeOptions: RouteOptions) {
+                            if (routeRequestState.activeRequestId == ownRequestId.value) {
+                                routeRequestState.activeRequestId = null
+                                Log.e("MapWidget", "Route request failed: $reasons")
+                                routeRequestError = "Trasu se nepodařilo najít"
+                            }
+                        }
+                        override fun onRoutesReady(routes: List<NavigationRoute>, routerOrigin: String) {
+                            // Only apply this result — and only clear the tracked id — if no
+                            // newer request has since taken ownership of activeRequestId. A
+                            // superseded (stale) result must never overwrite a newer route.
+                            if (routeRequestState.activeRequestId == ownRequestId.value) {
+                                routeRequestState.activeRequestId = null
+                                mapboxNavigation.setNavigationRoutes(routes)
+                            }
+                        }
+                    }
+                    val requestId = mapboxNavigation.requestRoutes(
                         RouteOptions.builder()
                             .applyDefaultNavigationOptions()
                             .applyLanguageAndVoiceUnitOptions(context)
@@ -384,21 +426,10 @@ fun MapWidget(
                                 )
                             )
                             .build(),
-                        object : NavigationRouterCallback {
-                            override fun onCanceled(routeOptions: RouteOptions, routerOrigin: String) {
-                                routeRequestState.activeRequestId = null
-                            }
-                            override fun onFailure(reasons: List<RouterFailure>, routeOptions: RouteOptions) {
-                                routeRequestState.activeRequestId = null
-                                Log.e("MapWidget", "Route request failed: $reasons")
-                                routeRequestError = "Trasu se nepodařilo najít"
-                            }
-                            override fun onRoutesReady(routes: List<NavigationRoute>, routerOrigin: String) {
-                                routeRequestState.activeRequestId = null
-                                mapboxNavigation.setNavigationRoutes(routes)
-                            }
-                        }
+                        callback
                     )
+                    ownRequestId.value = requestId
+                    routeRequestState.activeRequestId = requestId
                 },
                 modifier = Modifier.fillMaxWidth()
             )
