@@ -104,4 +104,12 @@ dependencies {
 
     // Mapbox Maps SDK
     implementation("com.mapbox.maps:android:11.30.1")
+
+    // Mapbox Navigation SDK — Fáze 3, turn-by-turn navigace
+    implementation("com.mapbox.navigationcore:navigation:3.30.1")
+    implementation("com.mapbox.navigationcore:ui-components:3.30.1")
+
+    // Mapbox Search SDK — Fáze 3, vyhledávání cíle
+    implementation("com.mapbox.search:mapbox-search-android:2.30.1")
+    implementation("com.mapbox.search:mapbox-search-android-ui:2.30.1")
 }
