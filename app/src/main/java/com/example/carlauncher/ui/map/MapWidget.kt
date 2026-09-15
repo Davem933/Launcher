@@ -51,6 +51,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.mapbox.bindgen.Expected
 import com.mapbox.bindgen.ExpectedFactory
 import com.mapbox.bindgen.Value
 import com.mapbox.common.location.Location
@@ -96,6 +97,7 @@ import com.mapbox.navigation.core.trip.session.LocationMatcherResult
 import com.mapbox.navigation.core.trip.session.LocationObserver
 import com.mapbox.navigation.core.trip.session.RouteProgressObserver
 import com.mapbox.navigation.core.trip.session.TripSessionState
+import com.mapbox.navigation.core.trip.session.VoiceInstructionsObserver
 import com.mapbox.navigation.tripdata.maneuver.api.MapboxManeuverApi
 import com.mapbox.navigation.tripdata.maneuver.model.Maneuver
 import com.mapbox.navigation.tripdata.progress.api.MapboxTripProgressApi
@@ -105,6 +107,7 @@ import com.mapbox.navigation.tripdata.progress.model.PercentDistanceTraveledForm
 import com.mapbox.navigation.tripdata.progress.model.TimeRemainingFormatter
 import com.mapbox.navigation.tripdata.progress.model.TripProgressUpdateFormatter
 import com.mapbox.navigation.tripdata.progress.model.TripProgressUpdateValue
+import com.mapbox.navigation.ui.base.util.MapboxNavigationConsumer
 import com.mapbox.navigation.ui.components.maneuver.view.MapboxManeuverView
 import com.mapbox.navigation.ui.components.tripprogress.view.MapboxTripProgressView
 import com.mapbox.navigation.ui.maps.camera.NavigationCamera
@@ -115,6 +118,12 @@ import com.mapbox.navigation.ui.maps.route.line.api.MapboxRouteLineApi
 import com.mapbox.navigation.ui.maps.route.line.api.MapboxRouteLineView
 import com.mapbox.navigation.ui.maps.route.line.model.MapboxRouteLineApiOptions
 import com.mapbox.navigation.ui.maps.route.line.model.MapboxRouteLineViewOptions
+import com.mapbox.navigation.voice.api.MapboxSpeechApi
+import com.mapbox.navigation.voice.api.MapboxVoiceInstructionsPlayer
+import com.mapbox.navigation.voice.model.SpeechAnnouncement
+import com.mapbox.navigation.voice.model.SpeechError
+import com.mapbox.navigation.voice.model.SpeechValue
+import java.util.Locale
 
 private const val TRAFFIC_SOURCE_ID = "traffic-source"
 private const val TRAFFIC_LAYER_ID = "traffic-congestion"
@@ -245,6 +254,37 @@ fun MapWidget(
         )
     }
 
+    // Task 5: voice guidance during active navigation. Constructed via `remember` (not lazily)
+    // for the same reason the reference app instantiates both in `Activity#onCreate` rather
+    // than lazily: on-device TTS setup takes real time, and a lazy init risks the first
+    // instruction firing before it's ready. Language is the device's own locale rather than
+    // the reference's hardcoded Locale.US — this project's route requests already resolve
+    // their voice-instruction language from the device locale via
+    // applyLanguageAndVoiceUnitOptions(context) below, so the player/speech API must match it
+    // or the synthesized/fallback-TTS audio would default to English pronunciation while the
+    // instructions themselves (and this app's UI) are in the device's actual language.
+    val speechApi = remember { MapboxSpeechApi(context, Locale.getDefault().language) }
+    val voiceInstructionsPlayer = remember {
+        MapboxVoiceInstructionsPlayer(context, Locale.getDefault().language)
+    }
+    // Frees the downloaded mp3 (if any) once it's done playing — mirrors the reference app's
+    // voiceInstructionsPlayerCallback exactly (JetpackComposeActivity.kt).
+    val voiceInstructionsPlayerCallback = remember(speechApi) {
+        MapboxNavigationConsumer<SpeechAnnouncement> { value -> speechApi.clean(value) }
+    }
+    // Plays the synthesized mp3 when available, or falls back to the on-device TTS engine via
+    // error.fallback when speechApi couldn't generate/download one (no signal, server error,
+    // etc.) — the SDK itself decides which branch fires per instruction, this just wires both
+    // outcomes to the same player. Same shape as the reference app's speechCallback.
+    val speechCallback = remember(voiceInstructionsPlayer, voiceInstructionsPlayerCallback) {
+        MapboxNavigationConsumer<Expected<SpeechError, SpeechValue>> { expected ->
+            expected.fold(
+                { error -> voiceInstructionsPlayer.play(error.fallback, voiceInstructionsPlayerCallback) },
+                { value -> voiceInstructionsPlayer.play(value.announcement, voiceInstructionsPlayerCallback) },
+            )
+        }
+    }
+
     LaunchedEffect(routeRequestError) {
         if (routeRequestError == null) return@LaunchedEffect
         delay(4000)
@@ -285,7 +325,14 @@ fun MapWidget(
     // trip progress overlays. Registered for this composable's lifetime, same rationale as the
     // routesObserver DisposableEffect above (MapWidget isn't a class, so it can't host these as
     // requireMapboxNavigation()'s onResumedObserver members the way the reference Activity does).
-    DisposableEffect(mapboxNavigation, maneuverApi, tripProgressApi, navigationLocationProvider) {
+    DisposableEffect(
+        mapboxNavigation,
+        maneuverApi,
+        tripProgressApi,
+        navigationLocationProvider,
+        speechApi,
+        speechCallback,
+    ) {
         val locationObserver = object : LocationObserver {
             override fun onNewRawLocation(rawLocation: Location) {
                 // Not used — the enhanced/map-matched location below is what drives the puck
@@ -307,11 +354,25 @@ fun MapWidget(
             currentManeuvers = maneuverApi.getManeuvers(routeProgress).getValueOrElse { emptyList() }
             currentTripProgress = tripProgressApi.getTripProgress(routeProgress)
         }
+        // Task 5: fires whenever the active trip session reaches a new voice instruction along
+        // the route. Registered unconditionally here — for this composable's whole lifetime,
+        // not gated on isNavigating — for the same reason locationObserver/routeProgressObserver
+        // above aren't gated either: the SDK only ever invokes VoiceInstructionsObserver while a
+        // trip session is actually running (voice instructions are derived from route-leg
+        // progress during active guidance), so there's nothing for it to fire while free-driving
+        // regardless of registration state. This matches the reference app exactly — its
+        // onAttached registers voiceInstructionsObserver in the very same block as the other
+        // three observers, with no separate condition around it (JetpackComposeActivity.kt).
+        val voiceInstructionsObserver = VoiceInstructionsObserver { voiceInstructions ->
+            speechApi.generate(voiceInstructions, speechCallback)
+        }
         mapboxNavigation.registerLocationObserver(locationObserver)
         mapboxNavigation.registerRouteProgressObserver(routeProgressObserver)
+        mapboxNavigation.registerVoiceInstructionsObserver(voiceInstructionsObserver)
         onDispose {
             mapboxNavigation.unregisterLocationObserver(locationObserver)
             mapboxNavigation.unregisterRouteProgressObserver(routeProgressObserver)
+            mapboxNavigation.unregisterVoiceInstructionsObserver(voiceInstructionsObserver)
         }
     }
 
@@ -744,7 +805,16 @@ fun MapWidget(
             // instance is gone for good regardless of what we do here — a fresh MapView is
             // created via `remember` if/when MapWidget re-enters composition. Always destroy it
             // to release its resources; the `mapState.destroyed` guard prevents a double-destroy.
-            if (!mapState.destroyed) { mapState.destroyed = true; mapView.onDestroy() }
+            if (!mapState.destroyed) {
+                mapState.destroyed = true
+                // Task 5: release the voice-guidance resources alongside the map teardown —
+                // same disposal set as the reference app's onDestroy() (minus maneuverApi.cancel()
+                // and routeLineView.cancel(), which are out of this task's scope).
+                speechApi.cancel()
+                voiceInstructionsPlayer.shutdown()
+                routeLineApi.cancel()
+                mapView.onDestroy()
+            }
         }
     }
 }
