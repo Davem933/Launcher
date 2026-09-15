@@ -6,6 +6,7 @@ import android.graphics.Paint
 import android.util.Log
 import com.example.carlauncher.data.model.Parking
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -70,6 +71,19 @@ import com.mapbox.maps.extension.style.layers.properties.generated.LineJoin
 import com.mapbox.maps.extension.style.sources.addSource
 import com.mapbox.maps.extension.style.sources.generated.GeoJsonSource
 import com.mapbox.maps.extension.style.sources.generated.VectorSource
+import com.mapbox.api.directions.v5.models.RouteOptions
+import com.mapbox.navigation.base.extensions.applyDefaultNavigationOptions
+import com.mapbox.navigation.base.extensions.applyLanguageAndVoiceUnitOptions
+import com.mapbox.navigation.base.route.NavigationRoute
+import com.mapbox.navigation.base.route.NavigationRouterCallback
+import com.mapbox.navigation.base.route.RouterFailure
+import com.mapbox.navigation.core.directions.session.RoutesObserver
+import com.mapbox.navigation.core.lifecycle.MapboxNavigationApp
+import com.mapbox.navigation.core.lifecycle.requireMapboxNavigation
+import com.mapbox.navigation.ui.maps.route.line.api.MapboxRouteLineApi
+import com.mapbox.navigation.ui.maps.route.line.api.MapboxRouteLineView
+import com.mapbox.navigation.ui.maps.route.line.model.MapboxRouteLineApiOptions
+import com.mapbox.navigation.ui.maps.route.line.model.MapboxRouteLineViewOptions
 
 private const val TRAFFIC_SOURCE_ID = "traffic-source"
 private const val TRAFFIC_LAYER_ID = "traffic-congestion"
@@ -107,6 +121,61 @@ fun MapWidget(
     val locationProvider = remember { AppLocationProvider() }
     var styleLoaded by remember { mutableStateOf(false) }
     var isFollowing by remember { mutableStateOf(true) }
+
+    // MapboxNavigation instance for Task 3's route request/render (and Task 4's trip session).
+    // `requireMapboxNavigation()` is a `LifecycleOwner` extension (not an Activity-only API) —
+    // every SDK example uses it as `private val x by requireMapboxNavigation()` on a *class*
+    // (Activity/Service/Session), where `this` is a valid non-null receiver for the delegate's
+    // `getValue(thisRef: Any, ...)`. MapWidget is a bare @Composable function with no such
+    // receiver, and the Kotlin compiler confirms local delegated properties require a
+    // `getValue(Nothing?, KProperty0<*>)` overload (nullable thisRef) — this delegate's
+    // non-null `Any` signature doesn't qualify, so `by` cannot be used here directly
+    // (verified via ./gradlew compileDebugKotlin, not just inferred).
+    // Constructing the delegate still performs its real job as a side effect — attaching
+    // `lifecycleOwner` to MapboxNavigationApp (already set up in CarLauncherApp.onCreate())
+    // and registering a lifecycle observer — so it's created exactly once via `remember`, and
+    // the instance is then read the same way the delegate's own getValue() does internally.
+    remember { lifecycleOwner.requireMapboxNavigation() }
+    val mapboxNavigation = checkNotNull(MapboxNavigationApp.current()) {
+        "MapboxNavigation cannot be null. Ensure that MapboxNavigationApp is setup and an" +
+            " attached lifecycle is at least CREATED."
+    }
+    val routeLineApi = remember { MapboxRouteLineApi(MapboxRouteLineApiOptions.Builder().build()) }
+    val routeLineView = remember {
+        // No .routeLineBelowLayerId(...) — Style.STANDARD auto-detects and places the route
+        // line in the MIDDLE slot on its own (Mapbox route-line UI component docs).
+        MapboxRouteLineView(MapboxRouteLineViewOptions.Builder(context).build())
+    }
+    var routeRequestError by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(routeRequestError) {
+        if (routeRequestError == null) return@LaunchedEffect
+        delay(4000)
+        routeRequestError = null
+    }
+
+    // Mirrors the reference app's routesObserver: draw the route line when routes are set,
+    // clear it when they're reset. Registered for this composable's lifetime rather than via
+    // requireMapboxNavigation()'s onResumedObserver param, since MapWidget isn't a class that
+    // can host that observer as a member the way the reference Activity does.
+    DisposableEffect(mapboxNavigation, routeLineApi, routeLineView) {
+        val routesObserver = RoutesObserver { routeUpdateResult ->
+            val style = mapState.mapboxMap?.style
+            if (routeUpdateResult.navigationRoutes.isEmpty()) {
+                routeLineApi.clearRouteLine { value ->
+                    style?.let { routeLineView.renderClearRouteLineValue(it, value) }
+                }
+            } else {
+                routeLineApi.setNavigationRoutes(routeUpdateResult.navigationRoutes) { value ->
+                    style?.let { routeLineView.renderRouteDrawData(it, value) }
+                }
+            }
+        }
+        mapboxNavigation.registerRoutesObserver(routesObserver)
+        onDispose {
+            mapboxNavigation.unregisterRoutesObserver(routesObserver)
+        }
+    }
 
     LaunchedEffect(styleLoaded) {
         if (!styleLoaded) return@LaunchedEffect
@@ -254,6 +323,9 @@ fun MapWidget(
                             parkingSource.featureCollection(parkingToFeatureCollection(pendingParking))
                         }
 
+                        // Route line layers must exist before any route is drawn on top.
+                        routeLineView.initializeLayers(style)
+
                         styleLoaded = true
                     }
                 }
@@ -270,17 +342,58 @@ fun MapWidget(
         )
 
         // Always-visible destination search — matches the reference app's
-        // search-bar-over-map convention. Task 3 wires onDestinationSelected to route requesting.
-        DestinationSearchBar(
-            currentLocation = location,
-            onDestinationSelected = { point, name ->
-                Log.d("MapWidget", "Destination selected: $name @ $point")
-            },
+        // search-bar-over-map convention. onDestinationSelected requests a route from the
+        // current GPS fix to the chosen point; the routesObserver above draws it once ready.
+        // Starting guidance (startTripSession()) is out of scope here — that's Task 4.
+        Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
                 .padding(16.dp)
-        )
+        ) {
+            DestinationSearchBar(
+                currentLocation = location,
+                onDestinationSelected = { point, _ ->
+                    val currentLoc = location
+                    if (currentLoc == null) {
+                        routeRequestError = "Poloha není dostupná"
+                        return@DestinationSearchBar
+                    }
+                    routeRequestError = null
+                    mapboxNavigation.requestRoutes(
+                        RouteOptions.builder()
+                            .applyDefaultNavigationOptions()
+                            .applyLanguageAndVoiceUnitOptions(context)
+                            .coordinatesList(
+                                listOf(
+                                    Point.fromLngLat(currentLoc.lng, currentLoc.lat),
+                                    point
+                                )
+                            )
+                            .build(),
+                        object : NavigationRouterCallback {
+                            override fun onCanceled(routeOptions: RouteOptions, routerOrigin: String) {}
+                            override fun onFailure(reasons: List<RouterFailure>, routeOptions: RouteOptions) {
+                                Log.e("MapWidget", "Route request failed: $reasons")
+                                routeRequestError = "Trasu se nepodařilo najít"
+                            }
+                            override fun onRoutesReady(routes: List<NavigationRoute>, routerOrigin: String) {
+                                mapboxNavigation.setNavigationRoutes(routes)
+                            }
+                        }
+                    )
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
+            if (routeRequestError != null) {
+                Text(
+                    text = routeRequestError.orEmpty(),
+                    color = CarColors.Danger,
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(top = 8.dp, start = 4.dp)
+                )
+            }
+        }
 
         // Navigovat — primary CTA, bottom-right corner of the map
         Button(
