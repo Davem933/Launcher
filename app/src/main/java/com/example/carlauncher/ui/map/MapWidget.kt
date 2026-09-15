@@ -98,6 +98,15 @@ private class MapState {
     var destroyed = false
 }
 
+// Tracks the in-flight requestRoutes() call so a newer destination selection can cancel a
+// still-pending older one via MapboxNavigation.cancelRouteRequest — otherwise a slow route
+// response for an earlier pick could land after a newer one and overwrite it on the map.
+// Not Compose State: it's only read/written inside the onDestinationSelected callback, never
+// during composition, so a plain remembered var (same pattern as MapState above) is enough.
+private class RouteRequestState {
+    var activeRequestId: Long? = null
+}
+
 @Composable
 fun MapWidget(
     modifier: Modifier = Modifier,
@@ -147,6 +156,7 @@ fun MapWidget(
         MapboxRouteLineView(MapboxRouteLineViewOptions.Builder(context).build())
     }
     var routeRequestError by remember { mutableStateOf<String?>(null) }
+    val routeRequestState = remember { RouteRequestState() }
 
     LaunchedEffect(routeRequestError) {
         if (routeRequestError == null) return@LaunchedEffect
@@ -360,7 +370,10 @@ fun MapWidget(
                         return@DestinationSearchBar
                     }
                     routeRequestError = null
-                    mapboxNavigation.requestRoutes(
+                    // Cancel any still-pending request from a previous destination pick so its
+                    // callback can't land after (and overwrite) this newer one's route.
+                    routeRequestState.activeRequestId?.let { mapboxNavigation.cancelRouteRequest(it) }
+                    routeRequestState.activeRequestId = mapboxNavigation.requestRoutes(
                         RouteOptions.builder()
                             .applyDefaultNavigationOptions()
                             .applyLanguageAndVoiceUnitOptions(context)
@@ -372,12 +385,16 @@ fun MapWidget(
                             )
                             .build(),
                         object : NavigationRouterCallback {
-                            override fun onCanceled(routeOptions: RouteOptions, routerOrigin: String) {}
+                            override fun onCanceled(routeOptions: RouteOptions, routerOrigin: String) {
+                                routeRequestState.activeRequestId = null
+                            }
                             override fun onFailure(reasons: List<RouterFailure>, routeOptions: RouteOptions) {
+                                routeRequestState.activeRequestId = null
                                 Log.e("MapWidget", "Route request failed: $reasons")
                                 routeRequestError = "Trasu se nepodařilo najít"
                             }
                             override fun onRoutesReady(routes: List<NavigationRoute>, routerOrigin: String) {
+                                routeRequestState.activeRequestId = null
                                 mapboxNavigation.setNavigationRoutes(routes)
                             }
                         }
