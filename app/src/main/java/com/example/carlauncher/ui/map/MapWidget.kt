@@ -217,6 +217,7 @@ fun MapWidget(
     }
     var routeRequestError by remember { mutableStateOf<String?>(null) }
     val routeRequestState = remember { RouteRequestState() }
+    var searchExpanded by remember { mutableStateOf(false) }
 
     // Task 4: whether active turn-by-turn guidance is running — a pure mirror of the SDK's own
     // trip session state, never an independently maintained flag. The session lives outside this
@@ -604,20 +605,39 @@ fun MapWidget(
         // overlay slot, and showing both stacked at once would look broken. It's the entry
         // point for free-drive only; once guidance starts, the maneuver banner is the
         // equivalent top overlay (design spec's free-drive vs. active-navigation split).
-        if (!isNavigating) {
+        //
+        // Two states, mutually exclusive: collapsed shows the compact top-left button
+        // (DestinationSearchBar); expanded shows the full-panel takeover (SearchOverlay). The
+        // overlay owns its own search/category/history logic — this composable only supplies
+        // the current GPS fix and the route-request callback, exactly as it did for the old
+        // single-widget search bar.
+        if (!isNavigating && !searchExpanded) {
             Column(
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxWidth()
+                    .align(Alignment.TopStart)
                     .padding(16.dp)
             ) {
-                DestinationSearchBar(
-                    currentLocation = location,
-                    onDestinationSelected = { point, _ ->
+                DestinationSearchBar(onClick = { searchExpanded = true })
+                if (routeRequestError != null) {
+                    Text(
+                        text = routeRequestError.orEmpty(),
+                        color = CarColors.Danger,
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(top = 8.dp, start = 4.dp)
+                    )
+                }
+            }
+        }
+
+        if (!isNavigating && searchExpanded) {
+            SearchOverlay(
+                currentLocation = location,
+                onDismiss = { searchExpanded = false },
+                onDestinationSelected = { point, _ ->
                         val currentLoc = location
                         if (currentLoc == null) {
                             routeRequestError = "Poloha není dostupná"
-                            return@DestinationSearchBar
+                            return@SearchOverlay
                         }
                         routeRequestError = null
                         // Cancel any still-pending request from a previous destination pick so its
@@ -682,17 +702,8 @@ fun MapWidget(
                         ownRequestId.value = requestId
                         routeRequestState.activeRequestId = requestId
                     },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                if (routeRequestError != null) {
-                    Text(
-                        text = routeRequestError.orEmpty(),
-                        color = CarColors.Danger,
-                        fontSize = 14.sp,
-                        modifier = Modifier.padding(top = 8.dp, start = 4.dp)
-                    )
-                }
-            }
+                modifier = Modifier.fillMaxSize()
+            )
         }
 
         // Active turn-by-turn overlays — maneuver banner (TopCenter, replaces the search bar
