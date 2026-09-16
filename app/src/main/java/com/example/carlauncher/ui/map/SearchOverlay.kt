@@ -21,11 +21,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
@@ -36,6 +40,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,6 +55,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.carlauncher.data.model.VehicleDisplayLocation
@@ -87,9 +93,13 @@ private const val CATEGORY_RESULT_LIMIT = 12
  *  - query blank, no category active -> POI category chips + recent searches
  *    ([com.mapbox.search.record.HistoryDataProvider], the Search SDK's own disk-persisted
  *    history store — reused rather than building a parallel DataStore).
- *  - query blank, category active -> category chips (to switch) + that category's results
- *    ([SearchEngine.search] with [CategorySearchOptions] — resolved [SearchResult]s directly,
- *    no suggestion->select step needed).
+ *  - query blank, category active -> dedicated category sub-screen (Autozen's "zoom out +
+ *    numbered pins" convention): a header (category name) and a numbered result list float over
+ *    the real map, which is NOT covered by this composable's own background in this state —
+ *    [onCategoryResultsChanged] reports the current results so [MapWidget] can draw matching
+ *    numbered pins and fit the camera on the SAME map instance, since this composable has no
+ *    map of its own. [SearchEngine.search] with [CategorySearchOptions] resolves [SearchResult]s
+ *    directly, no suggestion->select step needed.
  *  - query non-blank -> live suggestions, same two-step suggest->select flow as before.
  *
  * Voice input delegates to the system speech-recognizer app via
@@ -101,6 +111,7 @@ fun SearchOverlay(
     currentLocation: VehicleDisplayLocation?,
     onDestinationSelected: (Point, String) -> Unit,
     onDismiss: () -> Unit,
+    onCategoryResultsChanged: (List<SearchResult>) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -121,6 +132,14 @@ fun SearchOverlay(
     val latestLocation by rememberUpdatedState(currentLocation)
     val focusRequester = remember { FocusRequester() }
 
+    // Guarantees the map's numbered pins never outlive this overlay, regardless of which exit
+    // path closed it (selecting a result, tapping back from the category screen straight to
+    // dismiss, or the parent hiding it because navigation started) — this is the single, always-
+    // run cleanup; transitions that stay within the overlay (category -> browse) clear separately.
+    DisposableEffect(Unit) {
+        onDispose { onCategoryResultsChanged(emptyList()) }
+    }
+
     LaunchedEffect(Unit) {
         historyDataProvider.getAll(object : CompletionCallback<List<HistoryRecord>> {
             override fun onComplete(result: List<HistoryRecord>) {
@@ -137,8 +156,9 @@ fun SearchOverlay(
     // Typing exits category-browse mode — free-text query and category results are mutually
     // exclusive content states.
     LaunchedEffect(query) {
-        if (query.isNotEmpty()) {
+        if (query.isNotEmpty() && activeCategory != null) {
             activeCategory = null
+            onCategoryResultsChanged(emptyList())
         }
         if (query.length < MIN_QUERY_LENGTH) {
             suggestions = emptyList()
@@ -244,14 +264,21 @@ fun SearchOverlay(
             callback = object : SearchCallback {
                 override fun onResults(results: List<SearchResult>, responseInfo: ResponseInfo) {
                     categoryResults = results
+                    onCategoryResultsChanged(results)
                 }
 
                 override fun onError(e: Exception) {
                     Log.e(TAG, "Category search failed for ${category.mapboxCategoryName}", e)
                     categoryResults = emptyList()
+                    onCategoryResultsChanged(emptyList())
                 }
             },
         )
+    }
+
+    fun exitCategory() {
+        activeCategory = null
+        onCategoryResultsChanged(emptyList())
     }
 
     val voiceLauncher = rememberLauncherForActivityResult(
@@ -267,135 +294,172 @@ fun SearchOverlay(
         }
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(CarColors.Bg)
-            .padding(16.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onDismiss) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Zpět",
-                    tint = CarColors.Text,
-                )
-            }
-            Spacer(Modifier.width(4.dp))
-            Box(
+    Box(modifier = modifier.fillMaxSize()) {
+        val category = activeCategory
+        if (category != null) {
+            // Category-results sub-screen (Autozen convention): only this card has a background —
+            // the rest of the Box is transparent, so the real map (already rendered behind this
+            // whole overlay in MapWidget) shows through with the numbered pins MapWidget just drew
+            // from onCategoryResultsChanged. Back returns to the search/category browse screen,
+            // it does not close the overlay (spec: "samostatná obrazovka jako Autozen").
+            Column(
                 modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(28.dp))
-                    .background(CarColors.Surface)
-                    .padding(horizontal = 20.dp, vertical = 14.dp)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp))
+                    .background(CarColors.Bg)
+                    .padding(16.dp)
             ) {
-                BasicTextField(
-                    value = query,
-                    onValueChange = { query = it },
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { exitCategory() }) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Zpět",
+                            tint = CarColors.Text,
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = category.label,
+                        color = CarColors.Text,
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+                LazyColumn(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .focusRequester(focusRequester),
-                    textStyle = TextStyle(color = CarColors.Text, fontSize = 16.sp),
-                    cursorBrush = SolidColor(CarColors.Text),
-                    singleLine = true,
-                    decorationBox = { innerTextField ->
-                        if (query.isEmpty()) {
-                            Text("Hledat", color = CarColors.Text3, fontSize = 16.sp)
-                        }
-                        innerTextField()
-                    },
-                )
-            }
-            Spacer(Modifier.width(4.dp))
-            IconButton(onClick = {
-                val intent = android.content.Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
-                    putExtra(RecognizerIntent.EXTRA_PROMPT, "Kam jedeme?")
-                }
-                try {
-                    voiceLauncher.launch(intent)
-                } catch (e: ActivityNotFoundException) {
-                    Log.e(TAG, "No speech recognizer app available on this device", e)
-                }
-            }) {
-                Icon(
-                    imageVector = Icons.Default.Mic,
-                    contentDescription = "Hlasové vyhledávání",
-                    tint = CarColors.Text3,
-                )
-            }
-        }
-
-        Spacer(Modifier.width(0.dp).padding(top = 12.dp))
-
-        when {
-            query.isNotEmpty() -> {
-                LazyColumn(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
-                    items(suggestions) { suggestion ->
-                        SearchResultRow(
-                            title = suggestion.name,
-                            subtitle = suggestion.descriptionText ?: suggestion.fullAddress,
-                            onClick = {
-                                searchEngine.select(
-                                    suggestion = suggestion,
-                                    callback = object : SearchSelectionCallback {
-                                        override fun onResult(
-                                            suggestion: SearchSuggestion,
-                                            result: SearchResult,
-                                            responseInfo: ResponseInfo,
-                                        ) {
-                                            selectResult(result)
-                                        }
-
-                                        override fun onResults(
-                                            suggestion: SearchSuggestion,
-                                            results: List<SearchResult>,
-                                            responseInfo: ResponseInfo,
-                                        ) {
-                                            val result = results.firstOrNull() ?: return
-                                            selectResult(result)
-                                        }
-
-                                        override fun onSuggestions(
-                                            newSuggestions: List<SearchSuggestion>,
-                                            responseInfo: ResponseInfo,
-                                        ) {
-                                            suggestions = newSuggestions
-                                        }
-
-                                        override fun onError(e: Exception) {
-                                            Log.e(TAG, "Search selection request failed", e)
-                                        }
-                                    },
-                                )
-                            },
+                        .heightIn(max = 340.dp)
+                        .padding(top = 8.dp)
+                ) {
+                    itemsIndexed(categoryResults) { index, result ->
+                        NumberedResultRow(
+                            number = index + 1,
+                            title = result.name,
+                            subtitle = result.descriptionText ?: result.fullAddress,
+                            onClick = { selectResult(result) },
                         )
                     }
                 }
             }
-            else -> {
-                Column(modifier = Modifier.padding(top = 12.dp)) {
-                    Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                        SearchCategory.entries.forEach { category ->
-                            CategoryChip(
-                                category = category,
-                                selected = activeCategory == category,
-                                onClick = { runCategorySearch(category) },
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(CarColors.Bg)
+                    .padding(16.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Zpět",
+                            tint = CarColors.Text,
+                        )
+                    }
+                    Spacer(Modifier.width(4.dp))
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(28.dp))
+                            .background(CarColors.Surface)
+                            .padding(horizontal = 20.dp, vertical = 14.dp)
+                    ) {
+                        BasicTextField(
+                            value = query,
+                            onValueChange = { query = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(focusRequester),
+                            textStyle = TextStyle(color = CarColors.Text, fontSize = 16.sp),
+                            cursorBrush = SolidColor(CarColors.Text),
+                            singleLine = true,
+                            decorationBox = { innerTextField ->
+                                if (query.isEmpty()) {
+                                    Text("Hledat", color = CarColors.Text3, fontSize = 16.sp)
+                                }
+                                innerTextField()
+                            },
+                        )
+                    }
+                    Spacer(Modifier.width(4.dp))
+                    IconButton(onClick = {
+                        val intent = android.content.Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+                            putExtra(RecognizerIntent.EXTRA_PROMPT, "Kam jedeme?")
+                        }
+                        try {
+                            voiceLauncher.launch(intent)
+                        } catch (e: ActivityNotFoundException) {
+                            Log.e(TAG, "No speech recognizer app available on this device", e)
+                        }
+                    }) {
+                        Icon(
+                            imageVector = Icons.Default.Mic,
+                            contentDescription = "Hlasové vyhledávání",
+                            tint = CarColors.Text3,
+                        )
+                    }
+                }
+
+                Spacer(Modifier.width(0.dp).padding(top = 12.dp))
+
+                if (query.isNotEmpty()) {
+                    LazyColumn(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+                        items(suggestions) { suggestion ->
+                            SearchResultRow(
+                                title = suggestion.name,
+                                subtitle = suggestion.descriptionText ?: suggestion.fullAddress,
+                                onClick = {
+                                    searchEngine.select(
+                                        suggestion = suggestion,
+                                        callback = object : SearchSelectionCallback {
+                                            override fun onResult(
+                                                suggestion: SearchSuggestion,
+                                                result: SearchResult,
+                                                responseInfo: ResponseInfo,
+                                            ) {
+                                                selectResult(result)
+                                            }
+
+                                            override fun onResults(
+                                                suggestion: SearchSuggestion,
+                                                results: List<SearchResult>,
+                                                responseInfo: ResponseInfo,
+                                            ) {
+                                                val result = results.firstOrNull() ?: return
+                                                selectResult(result)
+                                            }
+
+                                            override fun onSuggestions(
+                                                newSuggestions: List<SearchSuggestion>,
+                                                responseInfo: ResponseInfo,
+                                            ) {
+                                                suggestions = newSuggestions
+                                            }
+
+                                            override fun onError(e: Exception) {
+                                                Log.e(TAG, "Search selection request failed", e)
+                                            }
+                                        },
+                                    )
+                                },
                             )
-                            Spacer(Modifier.width(10.dp))
                         }
                     }
-                    LazyColumn(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
-                        if (activeCategory != null) {
-                            items(categoryResults) { result ->
-                                SearchResultRow(
-                                    title = result.name,
-                                    subtitle = result.descriptionText ?: result.fullAddress,
-                                    onClick = { selectResult(result) },
+                } else {
+                    Column(modifier = Modifier.padding(top = 12.dp)) {
+                        Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                            SearchCategory.entries.forEach { entry ->
+                                CategoryChip(
+                                    category = entry,
+                                    selected = false,
+                                    onClick = { runCategorySearch(entry) },
                                 )
+                                Spacer(Modifier.width(10.dp))
                             }
-                        } else {
+                        }
+                        LazyColumn(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
                             if (recentSearches.isNotEmpty()) {
                                 item {
                                     Text(
@@ -447,6 +511,39 @@ private fun CategoryChip(
             color = if (selected) CarColors.Bg else CarColors.Text,
             fontSize = 14.sp,
         )
+    }
+}
+
+@Composable
+private fun NumberedResultRow(
+    number: Int,
+    title: String,
+    subtitle: String?,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 4.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(CarColors.Accent),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(text = number.toString(), color = CarColors.Bg, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.width(14.dp))
+        Column {
+            Text(text = title, color = CarColors.Text, fontSize = 15.sp)
+            if (subtitle != null) {
+                Text(text = subtitle, color = CarColors.Text3, fontSize = 12.sp)
+            }
+        }
     }
 }
 

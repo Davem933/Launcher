@@ -71,6 +71,9 @@ import com.mapbox.maps.plugin.gestures.OnMoveListener
 import com.mapbox.maps.plugin.gestures.gestures
 import com.mapbox.maps.plugin.locationcomponent.createDefault2DPuck
 import com.mapbox.maps.plugin.locationcomponent.location
+import com.mapbox.maps.plugin.annotation.annotations
+import com.mapbox.maps.plugin.annotation.generated.PointAnnotationOptions
+import com.mapbox.maps.plugin.annotation.generated.createPointAnnotationManager
 import com.mapbox.android.gestures.MoveGestureDetector
 import com.mapbox.maps.extension.style.expressions.generated.Expression
 import com.mapbox.maps.extension.style.layers.addLayer
@@ -121,6 +124,7 @@ import com.mapbox.navigation.ui.maps.route.line.api.MapboxRouteLineApi
 import com.mapbox.navigation.ui.maps.route.line.api.MapboxRouteLineView
 import com.mapbox.navigation.ui.maps.route.line.model.MapboxRouteLineApiOptions
 import com.mapbox.navigation.ui.maps.route.line.model.MapboxRouteLineViewOptions
+import com.mapbox.search.result.SearchResult
 
 private const val TRAFFIC_SOURCE_ID = "traffic-source"
 private const val TRAFFIC_LAYER_ID = "traffic-congestion"
@@ -128,6 +132,12 @@ private const val TRAFFIC_LAYER_ID = "traffic-congestion"
 private const val PARKING_IMAGE_ID = "parking-icon"
 private const val PARKING_SOURCE_ID = "parking-source"
 private const val PARKING_LAYER_ID = "parking-layer"
+
+// Autozen-style "zoom out + numbered pins" for category search results (SearchOverlay). Matches
+// SearchOverlay.kt's own CATEGORY_RESULT_LIMIT — one style image per possible list position, so
+// every result gets a matching numbered pin on the map.
+private const val MAX_CATEGORY_PINS = 12
+private const val CATEGORY_PIN_IMAGE_PREFIX = "category-pin-"
 
 // Final review I-1 / re-review M-2: end padding that keeps the maneuver banner's right-hand
 // content (step distance / lane guidance) clear of the Ukončit IconButton, which overlaps the
@@ -187,6 +197,7 @@ fun MapWidget(
         MapView(context, MapInitOptions(context = context, textureView = true))
     }
     val mapState = remember { MapState() }
+    val categoryPinsManager = remember { mapView.annotations.createPointAnnotationManager(null) }
     val locationProvider = remember { AppLocationProvider() }
     var styleLoaded by remember { mutableStateOf(false) }
     var isFollowing by remember { mutableStateOf(true) }
@@ -292,6 +303,33 @@ fun MapWidget(
     val endGuidance: () -> Unit = {
         mapboxNavigation.stopTripSession()
         mapboxNavigation.setNavigationRoutes(emptyList())
+    }
+
+    // Autozen-style category browsing: SearchOverlay reports its current category results here
+    // (empty when leaving category mode) so the numbered pins live on the SAME map the search
+    // overlay's list card floats over, not a separate map instance owned by the overlay itself.
+    val updateCategoryPins: (List<SearchResult>) -> Unit = { results ->
+        categoryPinsManager.deleteAll()
+        val map = mapState.mapboxMap
+        if (results.isNotEmpty() && map != null) {
+            results.forEachIndexed { index, result ->
+                categoryPinsManager.create(
+                    PointAnnotationOptions()
+                        .withPoint(result.coordinate)
+                        .withIconImage("$CATEGORY_PIN_IMAGE_PREFIX${index + 1}")
+                )
+            }
+            // EdgeInsets are pixels, not dp (same convention as followingPadding above) — top is
+            // generous to clear SearchOverlay's category-results header + list card.
+            val density = context.resources.displayMetrics.density
+            map.cameraForCoordinates(
+                results.map { it.coordinate },
+                CameraOptions.Builder().build(),
+                EdgeInsets(300.0 * density, 48.0 * density, 96.0 * density, 48.0 * density),
+                null,
+                null,
+            ) { camera -> map.setCamera(camera) }
+        }
     }
 
     LaunchedEffect(routeRequestError) {
@@ -561,6 +599,12 @@ fun MapWidget(
                             parkingSource.featureCollection(parkingToFeatureCollection(pendingParking))
                         }
 
+                        // Numbered pins for category search results (SearchOverlay) — registered
+                        // once here, referenced later by id when results actually arrive.
+                        for (n in 1..MAX_CATEGORY_PINS) {
+                            style.addImage("$CATEGORY_PIN_IMAGE_PREFIX$n", createNumberedPinIcon(n))
+                        }
+
                         // Route line layers must exist before any route is drawn on top.
                         routeLineView.initializeLayers(style)
 
@@ -633,6 +677,7 @@ fun MapWidget(
             SearchOverlay(
                 currentLocation = location,
                 onDismiss = { searchExpanded = false },
+                onCategoryResultsChanged = updateCategoryPins,
                 onDestinationSelected = { point, _ ->
                         val currentLoc = location
                         if (currentLoc == null) {
@@ -950,6 +995,30 @@ private fun createParkingIcon(): Bitmap {
         textAlign = Paint.Align.CENTER
         isFakeBoldText = true
     }.also { canvas.drawText("P", c, c - (it.descent() + it.ascent()) / 2f, it) }
+
+    return bitmap
+}
+
+// Blue circle with a white number — the numbered pin used for category search results, matching
+// the reference app's "zoom out + numbered list" convention. One bitmap per list position
+// (1..MAX_CATEGORY_PINS), registered once at style-load time like the parking icon above.
+private fun createNumberedPinIcon(number: Int): Bitmap {
+    val size = 64
+    val c = size / 2f
+    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+
+    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.parseColor("#6B8EF0") // CarColors.Accent
+        style = Paint.Style.FILL
+    }.also { canvas.drawCircle(c, c, c - 2f, it) }
+
+    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE
+        textSize = 30f
+        textAlign = Paint.Align.CENTER
+        isFakeBoldText = true
+    }.also { canvas.drawText(number.toString(), c, c - (it.descent() + it.ascent()) / 2f, it) }
 
     return bitmap
 }
