@@ -311,6 +311,15 @@ fun MapWidget(
     val updateCategoryPins: (List<SearchResult>) -> Unit = { results ->
         categoryPinsManager.deleteAll()
         val map = mapState.mapboxMap
+        // The always-on parking layer (Fáze 2) renders regardless of what else is on the map, so
+        // browsing e.g. "Benzín" would otherwise show purple parking pins mixed in with the
+        // numbered gas-station pins — hide it for the duration of category browsing, restore it
+        // once results clear (leaving category mode, or the whole overlay closing).
+        map?.style?.setStyleLayerProperty(
+            PARKING_LAYER_ID,
+            "visibility",
+            Value(if (results.isNotEmpty()) "none" else "visible"),
+        )
         if (results.isNotEmpty() && map != null) {
             results.forEachIndexed { index, result ->
                 categoryPinsManager.create(
