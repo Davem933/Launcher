@@ -1,6 +1,7 @@
 package com.example.carlauncher
 
 import android.app.Application
+import com.example.carlauncher.data.navigation.MapboxArrivalTeardownObserver
 import com.example.carlauncher.data.navigation.MapboxVoiceGuidanceObserver
 import com.mapbox.common.MapboxOptions
 import com.mapbox.navigation.base.options.NavigationOptions
@@ -20,5 +21,9 @@ class CarLauncherApp : Application() {
         // Registrace před prvním attach() je v pořádku: onAttached se zavolá, až se nějaký
         // LifecycleOwner (MainActivity přes requireMapboxNavigation) dostane na STARTED.
         MapboxNavigationApp.registerObserver(MapboxVoiceGuidanceObserver(this))
+        // Ukončení navigace po dojezdu musí přežít teardown MapWidgetu ze stejného důvodu —
+        // a navíc Mapbox si dojezd pro danou trasu latchuje a vystřelí ho jen jednou, takže
+        // observer registrovaný až po přepnutí zpět na Mapu už nic nedostane. Viz KDoc.
+        MapboxNavigationApp.registerObserver(MapboxArrivalTeardownObserver())
     }
 }

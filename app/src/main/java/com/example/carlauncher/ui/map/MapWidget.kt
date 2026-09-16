@@ -89,9 +89,6 @@ import com.mapbox.navigation.base.formatter.DistanceFormatterOptions
 import com.mapbox.navigation.base.route.NavigationRoute
 import com.mapbox.navigation.base.route.NavigationRouterCallback
 import com.mapbox.navigation.base.route.RouterFailure
-import com.mapbox.navigation.base.trip.model.RouteLegProgress
-import com.mapbox.navigation.base.trip.model.RouteProgress
-import com.mapbox.navigation.core.arrival.ArrivalObserver
 import com.mapbox.navigation.core.directions.session.RoutesObserver
 import com.mapbox.navigation.core.formatter.MapboxDistanceFormatter
 import com.mapbox.navigation.core.lifecycle.MapboxNavigationApp
@@ -100,6 +97,7 @@ import com.mapbox.navigation.core.trip.session.LocationMatcherResult
 import com.mapbox.navigation.core.trip.session.LocationObserver
 import com.mapbox.navigation.core.trip.session.RouteProgressObserver
 import com.mapbox.navigation.core.trip.session.TripSessionState
+import com.mapbox.navigation.core.trip.session.TripSessionStateObserver
 import com.mapbox.navigation.tripdata.maneuver.api.MapboxManeuverApi
 import com.mapbox.navigation.tripdata.maneuver.model.Maneuver
 import com.mapbox.navigation.tripdata.progress.api.MapboxTripProgressApi
@@ -130,6 +128,16 @@ private const val TRAFFIC_LAYER_ID = "traffic-congestion"
 private const val PARKING_IMAGE_ID = "parking-icon"
 private const val PARKING_SOURCE_ID = "parking-source"
 private const val PARKING_LAYER_ID = "parking-layer"
+
+// Final review I-1 / re-review M-2: end padding that keeps the maneuver banner's right-hand
+// content (step distance / lane guidance) clear of the Ukončit IconButton, which overlaps the
+// same TopEnd corner. The button's footprint measured from the map's right edge is
+// END_GUIDANCE_BUTTON_PADDING (18dp, applied around it) + 48dp (Material3's minimum touch
+// target for IconButton, which has no smaller intrinsic size) = 66dp; 72dp therefore leaves
+// 6dp of visible clearance. Recompute BOTH numbers if the button's padding or size changes —
+// otherwise the overlap comes back silently.
+private val MANEUVER_BANNER_END_PADDING = 72.dp
+private val END_GUIDANCE_BUTTON_PADDING = 18.dp
 
 private class MapState {
     var mapboxMap: MapboxMap? = null
@@ -210,17 +218,25 @@ fun MapWidget(
     var routeRequestError by remember { mutableStateOf<String?>(null) }
     val routeRequestState = remember { RouteRequestState() }
 
-    // Task 4: whether active turn-by-turn guidance is running. Deliberately NOT defaulted to
-    // false — MapboxNavigation's trip session lives outside this composable's own lifetime
-    // (it's tied to the Activity via MapboxNavigationApp/requireMapboxNavigation, see the
-    // long comment above), so switching MapNavPanel away from Map and back tears down and
-    // recreates this whole composable while guidance keeps running underneath. Deriving the
-    // initial value from mapboxNavigation.getTripSessionState() (instead of blindly starting
-    // in free-drive) is what makes the free-drive UI correctly NOT reappear over a still-active
-    // trip session. Verified against the SDK source (MapboxNavigation.kt, navigationcore
-    // 3.30.1 pinned in this project): `fun getTripSessionState(): TripSessionState =
-    // tripSession.getState()`, STARTED while a session (foreground service + location updates)
-    // is active, STOPPED otherwise — exactly the signal needed here.
+    // Task 4: whether active turn-by-turn guidance is running — a pure mirror of the SDK's own
+    // trip session state, never an independently maintained flag. The session lives outside this
+    // composable's lifetime (it's tied to the Activity via MapboxNavigationApp/
+    // requireMapboxNavigation, see the long comment above), so switching MapNavPanel away from
+    // Map and back tears down and recreates this whole composable while guidance keeps running
+    // underneath.
+    //
+    // This `remember` is only the FIRST-FRAME SEED: DisposableEffect bodies run after the first
+    // composition, so without it the very first frame would paint the free-drive UI over a
+    // still-active session before the observer below could correct it. Verified against the SDK
+    // source (MapboxNavigation.kt, navigationcore 3.30.1 pinned in this project):
+    // `fun getTripSessionState(): TripSessionState = tripSession.getState()`, STARTED while a
+    // session (foreground service + location updates) is active, STOPPED otherwise.
+    //
+    // From then on the value is driven by the TripSessionStateObserver registered further down,
+    // which is what makes it react to the session ending from OUTSIDE this composable — notably
+    // MapboxArrivalTeardownObserver's app-level arrival teardown. The two agree by construction:
+    // MapboxTripSession.registerStateObserver() emits the current state to the new observer
+    // synchronously on registration (MapboxTripSession.kt v3.30.1).
     var isNavigating by remember {
         mutableStateOf(mapboxNavigation.getTripSessionState() == TripSessionState.STARTED)
     }
@@ -260,16 +276,21 @@ fun MapWidget(
     // whole voice pipeline therefore lives in MapboxVoiceGuidanceObserver, registered once on
     // MapboxNavigationApp in CarLauncherApp.onCreate().
 
-    // Shared teardown for "guidance is over": the Ukončit button and the arrival observer below
-    // must do exactly the same thing. Closes only over `mapboxNavigation` and the state delegates
-    // declared above, all of which are stable for this composition, so it's safe for the
-    // DisposableEffect to capture it without being keyed on it.
+    // Ukončit button handler. Deliberately only the two SDK calls and no local state writes:
+    // stopTripSession() sets TripSessionState.STOPPED synchronously (MapboxTripSession.stop()
+    // ends with `state = TripSessionState.STOPPED`, and that property's setter notifies
+    // stateObservers inline — v3.30.1), so the TripSessionStateObserver below has already
+    // flipped isNavigating and cleared the overlays by the time this lambda returns. Setting
+    // them here too would be a second, parallel path to the same state — exactly what the
+    // arrival bug came from — with no gap for it to close.
+    //
+    // Arrival is NOT wired here: it now tears the session down at app level via
+    // MapboxArrivalTeardownObserver, because this composable does not exist while MapNavPanel
+    // shows the Navigace panel and the SDK only ever fires onFinalDestinationArrival once per
+    // route. The observer below picks up the resulting state change either way.
     val endGuidance: () -> Unit = {
         mapboxNavigation.stopTripSession()
         mapboxNavigation.setNavigationRoutes(emptyList())
-        currentManeuvers = null
-        currentTripProgress = null
-        isNavigating = false
     }
 
     LaunchedEffect(routeRequestError) {
@@ -339,28 +360,34 @@ fun MapWidget(
             currentManeuvers = maneuverApi.getManeuvers(routeProgress).getValueOrElse { emptyList() }
             currentTripProgress = tripProgressApi.getTripProgress(routeProgress)
         }
-        // Final review I-4: without this, the trip session (foreground service + continuous GPS
-        // + voice) would only ever end by the driver tapping Ukončit — on an always-on car
-        // launcher it would otherwise keep running indefinitely after arrival. Only
-        // onFinalDestinationArrival tears things down; onWaypointArrival fires per intermediate
-        // leg (this app's route requests only ever carry origin + destination today, but a
-        // via-point must not end the trip if that ever changes), and onNextRouteLegStart is
-        // driven by navigateNextRouteLeg(), which this app never calls.
-        val arrivalObserver = object : ArrivalObserver {
-            override fun onWaypointArrival(routeProgress: RouteProgress) {}
-            override fun onNextRouteLegStart(routeLegProgress: RouteLegProgress) {}
-            override fun onFinalDestinationArrival(routeProgress: RouteProgress) {
-                Log.d("MapWidget", "Final destination reached — ending trip session")
-                endGuidance()
+        // Re-review I-1: the single source of truth for isNavigating while this composable is
+        // alive. Guidance can end in three ways and all of them land here, because all of them
+        // go through the SDK's trip session: the Ukončit button (endGuidance above), arrival
+        // while MapWidget is composed, and arrival while it is NOT (MapboxArrivalTeardownObserver
+        // at app level — the composable is then simply recreated later and re-seeds itself from
+        // getTripSessionState()). Without this observer the middle case would leave the maneuver
+        // banner and trip progress bar on screen over a session that had already stopped.
+        // `TripSessionStateObserver` is a @UiThread fun interface with a single
+        // `onSessionStateChanged(TripSessionState)` (v3.30.1), so these Compose state writes
+        // stay on the main thread.
+        val tripSessionStateObserver = TripSessionStateObserver { tripSessionState ->
+            val navigating = tripSessionState == TripSessionState.STARTED
+            isNavigating = navigating
+            if (!navigating) {
+                // Drop the last route's overlays with the session, so a subsequently started
+                // navigation can't flash the previous trip's banner before its first
+                // RouteProgress arrives (see the null-vs-empty note on these declarations).
+                currentManeuvers = null
+                currentTripProgress = null
             }
         }
         mapboxNavigation.registerLocationObserver(locationObserver)
         mapboxNavigation.registerRouteProgressObserver(routeProgressObserver)
-        mapboxNavigation.registerArrivalObserver(arrivalObserver)
+        mapboxNavigation.registerTripSessionStateObserver(tripSessionStateObserver)
         onDispose {
             mapboxNavigation.unregisterLocationObserver(locationObserver)
             mapboxNavigation.unregisterRouteProgressObserver(routeProgressObserver)
-            mapboxNavigation.unregisterArrivalObserver(arrivalObserver)
+            mapboxNavigation.unregisterTripSessionStateObserver(tripSessionStateObserver)
         }
     }
 
@@ -629,8 +656,13 @@ fun MapWidget(
                                     mapboxNavigation.setNavigationRoutes(routes)
                                     // Task 4: this plan has no separate route-preview/"Start" step —
                                     // guidance begins immediately once a route is ready (spec §3 flow).
+                                    // No `isNavigating = true` here: startTripSession() sets
+                                    // TripSessionState.STARTED synchronously (MapboxTripSession.start()),
+                                    // which notifies the TripSessionStateObserver above inline — and if
+                                    // the session did NOT actually start (MapboxNavigation guards this
+                                    // with runIfNotDestroyed), leaving the flag alone is the correct
+                                    // outcome rather than showing guidance UI over nothing.
                                     mapboxNavigation.startTripSession()
-                                    isNavigating = true
                                 }
                             }
                         }
@@ -672,12 +704,17 @@ fun MapWidget(
             currentManeuvers?.let { maneuvers ->
                 AndroidView(
                     // Final review I-1: extra end padding keeps the banner's right-hand content
-                    // (step distance / lane guidance) clear of the Ukončit IconButton below,
-                    // which sits at TopEnd with 18dp padding around a 48dp touch target.
+                    // (step distance / lane guidance) clear of the Ukončit IconButton below —
+                    // see MANEUVER_BANNER_END_PADDING for how the number is derived.
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .fillMaxWidth()
-                        .padding(start = 16.dp, top = 16.dp, end = 72.dp, bottom = 16.dp),
+                        .padding(
+                            start = 16.dp,
+                            top = 16.dp,
+                            end = MANEUVER_BANNER_END_PADDING,
+                            bottom = 16.dp,
+                        ),
                     factory = { ctx ->
                         // Final review I-3: SDK defaults are light (blue-grey #37516F banner);
                         // re-tint to CarColors so the banner isn't a glare source at night.
@@ -712,7 +749,8 @@ fun MapWidget(
                 onClick = endGuidance,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(18.dp)
+                    // Counted into MANEUVER_BANNER_END_PADDING — changing it moves the banner too.
+                    .padding(END_GUIDANCE_BUTTON_PADDING)
                     .clip(CircleShape)
                     .background(CarColors.Surface2)
             ) {
