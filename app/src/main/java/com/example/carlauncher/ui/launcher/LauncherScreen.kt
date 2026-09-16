@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -52,15 +51,8 @@ fun LauncherScreen(
             .fillMaxSize()
             .background(CarColors.Bg)
     ) {
-        // ── StatusBar — fixed 44dp ────────────────────────────────────────────
-        StatusBar(
-            gpsFix = location != null,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(44.dp)
-        )
-
-        // ── Main content — fills remaining space ──────────────────────────────
+        // ── Main content — fills remaining space (StatusBar removed to give the
+        // launcher, and especially the map widget, the extra vertical room) ────
         Box(
             modifier = Modifier
                 .fillMaxWidth()

@@ -9,21 +9,14 @@ import com.example.carlauncher.data.model.Parking
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Navigation
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -31,10 +24,8 @@ import androidx.compose.foundation.border
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.carlauncher.ui.speed.SpeedDisplay
 import com.example.carlauncher.ui.theme.CarColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -71,6 +62,7 @@ import com.mapbox.maps.plugin.gestures.OnMoveListener
 import com.mapbox.maps.plugin.gestures.gestures
 import com.mapbox.maps.plugin.locationcomponent.createDefault2DPuck
 import com.mapbox.maps.plugin.locationcomponent.location
+import com.mapbox.maps.plugin.scalebar.scalebar
 import com.mapbox.maps.plugin.annotation.annotations
 import com.mapbox.maps.plugin.annotation.generated.PointAnnotationOptions
 import com.mapbox.maps.plugin.annotation.generated.createPointAnnotationManager
@@ -180,7 +172,6 @@ private class LongHolder {
 @Composable
 fun MapWidget(
     modifier: Modifier = Modifier,
-    onNavigate: () -> Unit = {},
     viewModel: MapViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -188,8 +179,7 @@ fun MapWidget(
     // LocalLifecycleOwner that may not advance to RESUMED while the page is offscreen,
     // which would leave MapView stuck and rendering a black surface.
     val lifecycleOwner = context as ComponentActivity
-    val location   by viewModel.vehicleLocation.collectAsStateWithLifecycle()
-    val speedLimit by viewModel.speedLimit.collectAsStateWithLifecycle()
+    val location by viewModel.vehicleLocation.collectAsStateWithLifecycle()
 
     val mapView = remember {
         // textureView: render via TextureView so Compose clip() can round the corners
@@ -487,6 +477,9 @@ fun MapWidget(
                     // a signal, the style never loads, so gestures/camera-follow must already be
                     // configured before that point, not gated behind it.
                     mapState.mapboxMap = mapboxMap
+                    // Mapbox's own scale ruler (top-left "50 m / 100 m" ladder) — removed per
+                    // request, this app doesn't want it on the map panel.
+                    scalebar.enabled = false
                     // Mapbox's own location puck, fed from our Kalman-filtered/route-snapped
                     // location instead of Mapbox's default device-GPS provider — no location
                     // permission needed here since we push updates ourselves.
@@ -645,19 +638,6 @@ fun MapWidget(
             },
             modifier = Modifier.fillMaxSize()
         )
-
-        // Final review I-1: hidden while navigating. MapboxTripProgressView below is a full-width
-        // opaque bar in the same bottom band and would otherwise sit straight over the speed
-        // readout. Unchanged outside active guidance — free drive keeps today's exact layout.
-        if (!isNavigating) {
-            SpeedDisplay(
-                speedKmh = location?.speedKmh ?: 0f,
-                speedLimitKmh = speedLimit,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 18.dp, bottom = 18.dp)
-            )
-        }
 
         // Destination search — matches the reference app's search-bar-over-map convention.
         // Hidden while isNavigating: the maneuver banner below occupies the same TopCenter
@@ -833,36 +813,6 @@ fun MapWidget(
             }
         }
 
-        // Navigovat — primary CTA, bottom-right corner of the map.
-        // Final review I-1: hidden while navigating, same bottom band as the full-width
-        // MapboxTripProgressView above. It only switches to the (unrelated, notification-based)
-        // Navigace panel, so there's nothing lost by taking it out of the active-guidance UI —
-        // and the Ukončit button is the correct control in that state. Unchanged in free drive.
-        if (!isNavigating) {
-            Button(
-                onClick = onNavigate,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(18.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = CarColors.Go),
-                shape = RoundedCornerShape(16.dp),
-                contentPadding = PaddingValues(horizontal = 26.dp, vertical = 15.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Navigation,
-                    contentDescription = null,
-                    tint = Color(0xFF06281B),
-                    modifier = Modifier.size(22.dp)
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                    text = "Navigovat",
-                    fontSize = 17.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = Color(0xFF06281B)
-                )
-            }
-        }
     }
 
     LaunchedEffect(location) {

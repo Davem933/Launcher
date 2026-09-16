@@ -190,7 +190,6 @@ fun MapNavPanel(
         when (effectiveView) {
             PanelView.MAP -> MapWidget(
                 modifier = Modifier.fillMaxSize(),
-                onNavigate = { manualView = PanelView.NAV },
             )
             PanelView.NAV -> NavAreaWidget(
                 speedKmh = speedKmh,

@@ -8,7 +8,6 @@ import com.example.carlauncher.data.model.Parking
 import com.example.carlauncher.data.model.VehicleDisplayLocation
 import com.example.carlauncher.data.poi.ParkingFetchThrottle
 import com.example.carlauncher.data.poi.ParkingRepository
-import com.example.carlauncher.data.speedlimit.SpeedLimitRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,11 +20,9 @@ import javax.inject.Inject
 class MapViewModel @Inject constructor(
     repository: LocationRepository,
     private val parkingRepository: ParkingRepository,
-    speedLimitRepository: SpeedLimitRepository,
 ) : ViewModel() {
 
     val vehicleLocation: StateFlow<VehicleDisplayLocation?> = repository.vehicleLocation
-    val speedLimit: StateFlow<Int> = speedLimitRepository.speedLimit
 
     private val _nearbyParking = MutableStateFlow<List<Parking>>(emptyList())
     val nearbyParking: StateFlow<List<Parking>> = _nearbyParking.asStateFlow()
