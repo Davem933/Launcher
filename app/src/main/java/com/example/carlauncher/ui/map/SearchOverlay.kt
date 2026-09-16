@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.carlauncher.data.model.VehicleDisplayLocation
 import com.example.carlauncher.ui.theme.CarColors
+import com.mapbox.geojson.BoundingBox
 import com.mapbox.geojson.Point
 import com.mapbox.search.ApiType
 import com.mapbox.search.CategorySearchOptions
@@ -83,7 +84,11 @@ private const val TAG = "SearchOverlay"
 private const val MIN_QUERY_LENGTH = 2
 private const val SEARCH_DEBOUNCE_MS = 300L
 private const val MAX_RECENT_SEARCHES = 8
-private const val CATEGORY_RESULT_LIMIT = 12
+private const val CATEGORY_RESULT_LIMIT = 8
+// ~3km half-width at these latitudes (1 degree latitude ≈ 111km) — keeps category results close
+// enough that MapWidget's camera-fit doesn't have to zoom out so far the numbered pins end up
+// hidden behind this card's floating list.
+private const val CATEGORY_SEARCH_RADIUS_DEG = 0.03
 
 /**
  * Full-panel search takeover (fills the whole map panel, matching the reference app's
@@ -255,10 +260,24 @@ fun SearchOverlay(
     fun runCategorySearch(category: SearchCategory) {
         activeCategory = category
         categoryResults = emptyList()
+        val here = latestLocation
         searchEngine.search(
             categoryName = category.mapboxCategoryName,
             options = CategorySearchOptions(
-                proximity = latestLocation?.let { Point.fromLngLat(it.lng, it.lat) },
+                proximity = here?.let { Point.fromLngLat(it.lng, it.lat) },
+                // Hard geographic cap, not just a proximity bias: without this, a sparse category
+                // (e.g. few nearby gas stations) lets the API reach many km away to fill the limit,
+                // forcing the camera to zoom out so far that most pins end up hidden behind this
+                // card. Reference app keeps its numbered pins tightly clustered — this is what
+                // achieves that, rather than just lowering the result count.
+                boundingBox = here?.let {
+                    BoundingBox.fromLngLats(
+                        it.lng - CATEGORY_SEARCH_RADIUS_DEG,
+                        it.lat - CATEGORY_SEARCH_RADIUS_DEG,
+                        it.lng + CATEGORY_SEARCH_RADIUS_DEG,
+                        it.lat + CATEGORY_SEARCH_RADIUS_DEG,
+                    )
+                },
                 limit = CATEGORY_RESULT_LIMIT,
             ),
             callback = object : SearchCallback {
@@ -302,10 +321,15 @@ fun SearchOverlay(
             // whole overlay in MapWidget) shows through with the numbered pins MapWidget just drew
             // from onCategoryResultsChanged. Back returns to the search/category browse screen,
             // it does not close the overlay (spec: "samostatná obrazovka jako Autozen").
+            //
+            // Floats with a margin on every side (not edge-to-edge) and is rounded on all four
+            // corners — matches the reference app's floating-card look, narrower than a full-width
+            // banner flush with the top edge.
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(bottomStart = 24.dp, bottomEnd = 24.dp))
+                    .padding(16.dp)
+                    .clip(RoundedCornerShape(24.dp))
                     .background(CarColors.Bg)
                     .padding(16.dp)
             ) {

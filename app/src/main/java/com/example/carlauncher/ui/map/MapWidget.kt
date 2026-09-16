@@ -136,7 +136,7 @@ private const val PARKING_LAYER_ID = "parking-layer"
 // Autozen-style "zoom out + numbered pins" for category search results (SearchOverlay). Matches
 // SearchOverlay.kt's own CATEGORY_RESULT_LIMIT — one style image per possible list position, so
 // every result gets a matching numbered pin on the map.
-private const val MAX_CATEGORY_PINS = 12
+private const val MAX_CATEGORY_PINS = 8
 private const val CATEGORY_PIN_IMAGE_PREFIX = "category-pin-"
 
 // Final review I-1 / re-review M-2: end padding that keeps the maneuver banner's right-hand
@@ -198,6 +198,11 @@ fun MapWidget(
     }
     val mapState = remember { MapState() }
     val categoryPinsManager = remember { mapView.annotations.createPointAnnotationManager(null) }
+    // Whether SearchOverlay is currently showing category results with a camera fit to them —
+    // the free-drive follow effect below must stand down while this is true, the same way it
+    // already does for isNavigating, or it fights (and wins, every ~500ms GPS tick) the one-time
+    // cameraForCoordinates fit and silently recenters back onto the current location.
+    var hasCategoryPins by remember { mutableStateOf(false) }
     val locationProvider = remember { AppLocationProvider() }
     var styleLoaded by remember { mutableStateOf(false) }
     var isFollowing by remember { mutableStateOf(true) }
@@ -310,6 +315,7 @@ fun MapWidget(
     // overlay's list card floats over, not a separate map instance owned by the overlay itself.
     val updateCategoryPins: (List<SearchResult>) -> Unit = { results ->
         categoryPinsManager.deleteAll()
+        hasCategoryPins = results.isNotEmpty()
         val map = mapState.mapboxMap
         // The always-on parking layer (Fáze 2) renders regardless of what else is on the map, so
         // browsing e.g. "Benzín" would otherwise show purple parking pins mixed in with the
@@ -872,7 +878,10 @@ fun MapWidget(
         // SDK's own NavigationCamera (fed by viewportDataSource in the locationObserver/
         // routeProgressObserver above) drives the camera instead, so this free-drive follow
         // logic must stand down rather than fight it for control every location update.
-        if (isFollowing && !isNavigating) {
+        // Also gated on !hasCategoryPins for the same reason — a category browse's one-time
+        // cameraForCoordinates fit would otherwise be undone within ~500ms by this effect
+        // recentering back onto the current location at the next GPS tick.
+        if (isFollowing && !isNavigating && !hasCategoryPins) {
             mapState.mapboxMap?.easeTo(
                 CameraOptions.Builder()
                     .center(Point.fromLngLat(snapLng, snapLat))
