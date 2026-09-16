@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.util.Log
+import com.example.carlauncher.R
 import com.example.carlauncher.data.model.Parking
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -51,7 +52,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.mapbox.bindgen.Expected
 import com.mapbox.bindgen.ExpectedFactory
 import com.mapbox.bindgen.Value
 import com.mapbox.common.location.Location
@@ -89,6 +89,9 @@ import com.mapbox.navigation.base.formatter.DistanceFormatterOptions
 import com.mapbox.navigation.base.route.NavigationRoute
 import com.mapbox.navigation.base.route.NavigationRouterCallback
 import com.mapbox.navigation.base.route.RouterFailure
+import com.mapbox.navigation.base.trip.model.RouteLegProgress
+import com.mapbox.navigation.base.trip.model.RouteProgress
+import com.mapbox.navigation.core.arrival.ArrivalObserver
 import com.mapbox.navigation.core.directions.session.RoutesObserver
 import com.mapbox.navigation.core.formatter.MapboxDistanceFormatter
 import com.mapbox.navigation.core.lifecycle.MapboxNavigationApp
@@ -97,7 +100,6 @@ import com.mapbox.navigation.core.trip.session.LocationMatcherResult
 import com.mapbox.navigation.core.trip.session.LocationObserver
 import com.mapbox.navigation.core.trip.session.RouteProgressObserver
 import com.mapbox.navigation.core.trip.session.TripSessionState
-import com.mapbox.navigation.core.trip.session.VoiceInstructionsObserver
 import com.mapbox.navigation.tripdata.maneuver.api.MapboxManeuverApi
 import com.mapbox.navigation.tripdata.maneuver.model.Maneuver
 import com.mapbox.navigation.tripdata.progress.api.MapboxTripProgressApi
@@ -107,7 +109,10 @@ import com.mapbox.navigation.tripdata.progress.model.PercentDistanceTraveledForm
 import com.mapbox.navigation.tripdata.progress.model.TimeRemainingFormatter
 import com.mapbox.navigation.tripdata.progress.model.TripProgressUpdateFormatter
 import com.mapbox.navigation.tripdata.progress.model.TripProgressUpdateValue
-import com.mapbox.navigation.ui.base.util.MapboxNavigationConsumer
+import com.mapbox.navigation.ui.components.maneuver.model.ManeuverPrimaryOptions
+import com.mapbox.navigation.ui.components.maneuver.model.ManeuverSecondaryOptions
+import com.mapbox.navigation.ui.components.maneuver.model.ManeuverSubOptions
+import com.mapbox.navigation.ui.components.maneuver.model.ManeuverViewOptions
 import com.mapbox.navigation.ui.components.maneuver.view.MapboxManeuverView
 import com.mapbox.navigation.ui.components.tripprogress.view.MapboxTripProgressView
 import com.mapbox.navigation.ui.maps.camera.NavigationCamera
@@ -118,12 +123,6 @@ import com.mapbox.navigation.ui.maps.route.line.api.MapboxRouteLineApi
 import com.mapbox.navigation.ui.maps.route.line.api.MapboxRouteLineView
 import com.mapbox.navigation.ui.maps.route.line.model.MapboxRouteLineApiOptions
 import com.mapbox.navigation.ui.maps.route.line.model.MapboxRouteLineViewOptions
-import com.mapbox.navigation.voice.api.MapboxSpeechApi
-import com.mapbox.navigation.voice.api.MapboxVoiceInstructionsPlayer
-import com.mapbox.navigation.voice.model.SpeechAnnouncement
-import com.mapbox.navigation.voice.model.SpeechError
-import com.mapbox.navigation.voice.model.SpeechValue
-import java.util.Locale
 
 private const val TRAFFIC_SOURCE_ID = "traffic-source"
 private const val TRAFFIC_LAYER_ID = "traffic-congestion"
@@ -254,35 +253,23 @@ fun MapWidget(
         )
     }
 
-    // Task 5: voice guidance during active navigation. Constructed via `remember` (not lazily)
-    // for the same reason the reference app instantiates both in `Activity#onCreate` rather
-    // than lazily: on-device TTS setup takes real time, and a lazy init risks the first
-    // instruction firing before it's ready. Language is the device's own locale rather than
-    // the reference's hardcoded Locale.US — this project's route requests already resolve
-    // their voice-instruction language from the device locale via
-    // applyLanguageAndVoiceUnitOptions(context) below, so the player/speech API must match it
-    // or the synthesized/fallback-TTS audio would default to English pronunciation while the
-    // instructions themselves (and this app's UI) are in the device's actual language.
-    val speechApi = remember { MapboxSpeechApi(context, Locale.getDefault().language) }
-    val voiceInstructionsPlayer = remember {
-        MapboxVoiceInstructionsPlayer(context, Locale.getDefault().language)
-    }
-    // Frees the downloaded mp3 (if any) once it's done playing — mirrors the reference app's
-    // voiceInstructionsPlayerCallback exactly (JetpackComposeActivity.kt).
-    val voiceInstructionsPlayerCallback = remember(speechApi) {
-        MapboxNavigationConsumer<SpeechAnnouncement> { value -> speechApi.clean(value) }
-    }
-    // Plays the synthesized mp3 when available, or falls back to the on-device TTS engine via
-    // error.fallback when speechApi couldn't generate/download one (no signal, server error,
-    // etc.) — the SDK itself decides which branch fires per instruction, this just wires both
-    // outcomes to the same player. Same shape as the reference app's speechCallback.
-    val speechCallback = remember(voiceInstructionsPlayer, voiceInstructionsPlayerCallback) {
-        MapboxNavigationConsumer<Expected<SpeechError, SpeechValue>> { expected ->
-            expected.fold(
-                { error -> voiceInstructionsPlayer.play(error.fallback, voiceInstructionsPlayerCallback) },
-                { value -> voiceInstructionsPlayer.play(value.announcement, voiceInstructionsPlayerCallback) },
-            )
-        }
+    // Task 5 / final review I-2: voice guidance is NOT wired here. MapWidget is torn down on
+    // every MapNavPanel switch away from Map (Fáze 2 leak fix), so anything scoped to this
+    // composition would silence a driver mid-route the moment they look at the Navigace panel —
+    // while spec §3 requires active navigation *including voice* to survive that switch. The
+    // whole voice pipeline therefore lives in MapboxVoiceGuidanceObserver, registered once on
+    // MapboxNavigationApp in CarLauncherApp.onCreate().
+
+    // Shared teardown for "guidance is over": the Ukončit button and the arrival observer below
+    // must do exactly the same thing. Closes only over `mapboxNavigation` and the state delegates
+    // declared above, all of which are stable for this composition, so it's safe for the
+    // DisposableEffect to capture it without being keyed on it.
+    val endGuidance: () -> Unit = {
+        mapboxNavigation.stopTripSession()
+        mapboxNavigation.setNavigationRoutes(emptyList())
+        currentManeuvers = null
+        currentTripProgress = null
+        isNavigating = false
     }
 
     LaunchedEffect(routeRequestError) {
@@ -330,8 +317,6 @@ fun MapWidget(
         maneuverApi,
         tripProgressApi,
         navigationLocationProvider,
-        speechApi,
-        speechCallback,
     ) {
         val locationObserver = object : LocationObserver {
             override fun onNewRawLocation(rawLocation: Location) {
@@ -354,25 +339,28 @@ fun MapWidget(
             currentManeuvers = maneuverApi.getManeuvers(routeProgress).getValueOrElse { emptyList() }
             currentTripProgress = tripProgressApi.getTripProgress(routeProgress)
         }
-        // Task 5: fires whenever the active trip session reaches a new voice instruction along
-        // the route. Registered unconditionally here — for this composable's whole lifetime,
-        // not gated on isNavigating — for the same reason locationObserver/routeProgressObserver
-        // above aren't gated either: the SDK only ever invokes VoiceInstructionsObserver while a
-        // trip session is actually running (voice instructions are derived from route-leg
-        // progress during active guidance), so there's nothing for it to fire while free-driving
-        // regardless of registration state. This matches the reference app exactly — its
-        // onAttached registers voiceInstructionsObserver in the very same block as the other
-        // three observers, with no separate condition around it (JetpackComposeActivity.kt).
-        val voiceInstructionsObserver = VoiceInstructionsObserver { voiceInstructions ->
-            speechApi.generate(voiceInstructions, speechCallback)
+        // Final review I-4: without this, the trip session (foreground service + continuous GPS
+        // + voice) would only ever end by the driver tapping Ukončit — on an always-on car
+        // launcher it would otherwise keep running indefinitely after arrival. Only
+        // onFinalDestinationArrival tears things down; onWaypointArrival fires per intermediate
+        // leg (this app's route requests only ever carry origin + destination today, but a
+        // via-point must not end the trip if that ever changes), and onNextRouteLegStart is
+        // driven by navigateNextRouteLeg(), which this app never calls.
+        val arrivalObserver = object : ArrivalObserver {
+            override fun onWaypointArrival(routeProgress: RouteProgress) {}
+            override fun onNextRouteLegStart(routeLegProgress: RouteLegProgress) {}
+            override fun onFinalDestinationArrival(routeProgress: RouteProgress) {
+                Log.d("MapWidget", "Final destination reached — ending trip session")
+                endGuidance()
+            }
         }
         mapboxNavigation.registerLocationObserver(locationObserver)
         mapboxNavigation.registerRouteProgressObserver(routeProgressObserver)
-        mapboxNavigation.registerVoiceInstructionsObserver(voiceInstructionsObserver)
+        mapboxNavigation.registerArrivalObserver(arrivalObserver)
         onDispose {
             mapboxNavigation.unregisterLocationObserver(locationObserver)
             mapboxNavigation.unregisterRouteProgressObserver(routeProgressObserver)
-            mapboxNavigation.unregisterVoiceInstructionsObserver(voiceInstructionsObserver)
+            mapboxNavigation.unregisterArrivalObserver(arrivalObserver)
         }
     }
 
@@ -548,6 +536,22 @@ fun MapWidget(
                         // Route line layers must exist before any route is drawn on top.
                         routeLineView.initializeLayers(style)
 
+                        // Redraw an already-active route after a MapNavPanel switch back to Mapa.
+                        // MapWidget — and with it MapView, routeLineApi and routeLineView — is
+                        // recreated on every switch, while the trip session keeps running
+                        // underneath. The RoutesObserver above *does* fire immediately on
+                        // re-registration with the still-active routes, but that happens before
+                        // this style finishes loading (measured on device: setNavigationRoutes at
+                        // T+0.465s vs. style loaded at T+0.926s), so `mapboxMap.style` was still
+                        // null there and the draw was dropped. The route set never changes again
+                        // afterwards, so without this the route line stays missing from the map
+                        // for the rest of the drive while guidance carries on regardless.
+                        // getRouteDrawData renders whatever routeLineApi already holds, so it is
+                        // correct in both orderings (and a harmless no-op when there's no route).
+                        routeLineApi.getRouteDrawData { value ->
+                            routeLineView.renderRouteDrawData(style, value)
+                        }
+
                         styleLoaded = true
                     }
                 }
@@ -555,13 +559,18 @@ fun MapWidget(
             modifier = Modifier.fillMaxSize()
         )
 
-        SpeedDisplay(
-            speedKmh = location?.speedKmh ?: 0f,
-            speedLimitKmh = speedLimit,
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(start = 18.dp, bottom = 18.dp)
-        )
+        // Final review I-1: hidden while navigating. MapboxTripProgressView below is a full-width
+        // opaque bar in the same bottom band and would otherwise sit straight over the speed
+        // readout. Unchanged outside active guidance — free drive keeps today's exact layout.
+        if (!isNavigating) {
+            SpeedDisplay(
+                speedKmh = location?.speedKmh ?: 0f,
+                speedLimitKmh = speedLimit,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 18.dp, bottom = 18.dp)
+            )
+        }
 
         // Destination search — matches the reference app's search-bar-over-map convention.
         // Hidden while isNavigating: the maneuver banner below occupies the same TopCenter
@@ -662,11 +671,20 @@ fun MapWidget(
         if (isNavigating) {
             currentManeuvers?.let { maneuvers ->
                 AndroidView(
+                    // Final review I-1: extra end padding keeps the banner's right-hand content
+                    // (step distance / lane guidance) clear of the Ukončit IconButton below,
+                    // which sits at TopEnd with 18dp padding around a 48dp touch target.
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .fillMaxWidth()
-                        .padding(16.dp),
-                    factory = { MapboxManeuverView(it) },
+                        .padding(start = 16.dp, top = 16.dp, end = 72.dp, bottom = 16.dp),
+                    factory = { ctx ->
+                        // Final review I-3: SDK defaults are light (blue-grey #37516F banner);
+                        // re-tint to CarColors so the banner isn't a glare source at night.
+                        MapboxManeuverView(ctx).apply {
+                            updateManeuverViewOptions(darkManeuverViewOptions())
+                        }
+                    },
                     update = { view -> view.renderManeuvers(ExpectedFactory.createValue(maneuvers)) }
                 )
             }
@@ -676,7 +694,14 @@ fun MapWidget(
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .height(64.dp),
-                    factory = { MapboxTripProgressView(it) },
+                    factory = { ctx ->
+                        // Final review I-3: the SDK default background is @color/colorSurface =
+                        // pure white (in Mapbox's values-night too), i.e. a full-width glowing
+                        // bar across the bottom of the map at night.
+                        MapboxTripProgressView(ctx).apply {
+                            updateStyle(R.style.CarTripProgressView)
+                        }
+                    },
                     update = { view -> view.render(progress) }
                 )
             }
@@ -684,13 +709,7 @@ fun MapWidget(
             // (this is a completely separate control from NavWidget's own "Ukončit", which
             // ends the unrelated notification-based navigation panel).
             IconButton(
-                onClick = {
-                    mapboxNavigation.stopTripSession()
-                    mapboxNavigation.setNavigationRoutes(emptyList())
-                    currentManeuvers = null
-                    currentTripProgress = null
-                    isNavigating = false
-                },
+                onClick = endGuidance,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(18.dp)
@@ -705,29 +724,35 @@ fun MapWidget(
             }
         }
 
-        // Navigovat — primary CTA, bottom-right corner of the map
-        Button(
-            onClick = onNavigate,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(18.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = CarColors.Go),
-            shape = RoundedCornerShape(16.dp),
-            contentPadding = PaddingValues(horizontal = 26.dp, vertical = 15.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Navigation,
-                contentDescription = null,
-                tint = Color(0xFF06281B),
-                modifier = Modifier.size(22.dp)
-            )
-            Spacer(modifier = Modifier.width(10.dp))
-            Text(
-                text = "Navigovat",
-                fontSize = 17.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = Color(0xFF06281B)
-            )
+        // Navigovat — primary CTA, bottom-right corner of the map.
+        // Final review I-1: hidden while navigating, same bottom band as the full-width
+        // MapboxTripProgressView above. It only switches to the (unrelated, notification-based)
+        // Navigace panel, so there's nothing lost by taking it out of the active-guidance UI —
+        // and the Ukončit button is the correct control in that state. Unchanged in free drive.
+        if (!isNavigating) {
+            Button(
+                onClick = onNavigate,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(18.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = CarColors.Go),
+                shape = RoundedCornerShape(16.dp),
+                contentPadding = PaddingValues(horizontal = 26.dp, vertical = 15.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Navigation,
+                    contentDescription = null,
+                    tint = Color(0xFF06281B),
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = "Navigovat",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color(0xFF06281B)
+                )
+            }
         }
     }
 
@@ -807,17 +832,49 @@ fun MapWidget(
             // to release its resources; the `mapState.destroyed` guard prevents a double-destroy.
             if (!mapState.destroyed) {
                 mapState.destroyed = true
-                // Task 5: release the voice-guidance resources alongside the map teardown —
-                // same disposal set as the reference app's onDestroy() (minus maneuverApi.cancel()
-                // and routeLineView.cancel(), which are out of this task's scope).
-                speechApi.cancel()
-                voiceInstructionsPlayer.shutdown()
+                // Final review M-1: cancel every MapWidget-scoped API that holds background work,
+                // matching the reference app's onDestroy(). The voice pipeline is deliberately
+                // absent — it is no longer scoped here (see I-2 / MapboxVoiceGuidanceObserver),
+                // and shutting it down on a panel switch is exactly the bug that fix removes.
                 routeLineApi.cancel()
+                routeLineView.cancel()
+                maneuverApi.cancel()
                 mapView.onDestroy()
             }
         }
     }
 }
+
+/**
+ * Tmavý styl pro MapboxManeuverView. Na rozdíl od MapboxTripProgressView tohle View nemá
+ * `updateStyle(@StyleRes Int)` — jediné veřejné API pro runtime přebarvení je
+ * `updateManeuverViewOptions(ManeuverViewOptions)` (ověřeno ve zdrojáku ui-components v3.30.1),
+ * kde barvy jdou jako @ColorRes a textové vzhledy jako @StyleRes. Odsud res/values/nav_styles.xml.
+ */
+private fun darkManeuverViewOptions(): ManeuverViewOptions =
+    ManeuverViewOptions.Builder()
+        .maneuverBackgroundColor(R.color.car_nav_surface)
+        .subManeuverBackgroundColor(R.color.car_nav_surface_2)
+        .upcomingManeuverBackgroundColor(R.color.car_nav_bg_2)
+        .turnIconManeuver(R.style.CarManeuverTurnIcon)
+        .laneGuidanceTurnIconManeuver(R.style.CarManeuverTurnIcon)
+        .stepDistanceTextAppearance(R.style.CarManeuverStepDistance)
+        .primaryManeuverOptions(
+            ManeuverPrimaryOptions.Builder()
+                .textAppearance(R.style.CarManeuverPrimaryText)
+                .build()
+        )
+        .secondaryManeuverOptions(
+            ManeuverSecondaryOptions.Builder()
+                .textAppearance(R.style.CarManeuverSecondaryText)
+                .build()
+        )
+        .subManeuverOptions(
+            ManeuverSubOptions.Builder()
+                .textAppearance(R.style.CarManeuverSubText)
+                .build()
+        )
+        .build()
 
 private fun parkingToFeatureCollection(parking: List<Parking>): FeatureCollection {
     val features = parking.map { p ->

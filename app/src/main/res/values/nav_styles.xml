@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Tmavý styl pro Mapboxí drop-in navigační View. Bez něj jedou na SDK defaultech, které jsou
+  světlé: MapboxTripProgressView má pozadí @color/colorSurface = #FFFFFF (a to i ve values-night
+  Mapboxu, kde colorSurface zůstává bílý), což je v noci v autě svítící bílý pruh přes celou
+  spodní hranu mapy. MapboxManeuverView jede na modrošedé #37516F, mimo paletu téhle appky.
+
+  Styly dědí z Mapboxích originálů, takže přebírají velikosti/gravity/ellipsize a přebijí jen
+  barvy — cíl je konzistence s CarColors, ne vlastní vzhled.
+-->
+<resources>
+
+    <!-- MapboxManeuverView (aplikuje se přes updateManeuverViewOptions(...)) -->
+    <style name="CarManeuverPrimaryText" parent="@style/MapboxStylePrimaryManeuver">
+        <item name="android:textColor">@color/car_nav_text</item>
+    </style>
+
+    <style name="CarManeuverSecondaryText" parent="@style/MapboxStyleSecondaryManeuver">
+        <item name="android:textColor">@color/car_nav_text_2</item>
+    </style>
+
+    <style name="CarManeuverSubText" parent="@style/MapboxStyleSubManeuver">
+        <item name="android:textColor">@color/car_nav_text_2</item>
+    </style>
+
+    <style name="CarManeuverStepDistance" parent="@style/MapboxStyleStepDistance">
+        <item name="android:textColor">@color/car_nav_text_2</item>
+    </style>
+
+    <style name="CarManeuverTurnIcon" parent="@style/MapboxStyleTurnIconManeuver">
+        <item name="maneuverTurnIconColor">@color/car_nav_text</item>
+        <item name="maneuverTurnIconShadowColor">@color/car_nav_border</item>
+    </style>
+
+    <!-- MapboxTripProgressView (aplikuje se přes updateStyle(@StyleRes)) -->
+    <style name="CarTripProgressTimeRemaining" parent="@style/MapboxStyleTimeRemaining">
+        <item name="android:textColor">@color/car_nav_go</item>
+    </style>
+
+    <style name="CarTripProgressDistanceRemaining" parent="@style/MapboxStyleDistanceRemaining">
+        <item name="android:textColor">@color/car_nav_text</item>
+    </style>
+
+    <style name="CarTripProgressEta" parent="@style/MapboxStyleEstimatedArrivalTime">
+        <item name="android:textColor">@color/car_nav_text</item>
+    </style>
+
+    <!--
+      tripProgressViewBackgroundColor se ve zdrojáku View čte přes getResourceId(...) a pak
+      posílá do ContextCompat.getColor(...), takže MUSÍ být reference na @color/, ne literál.
+    -->
+    <style name="CarTripProgressView" parent="@style/MapboxStyleTripProgressView">
+        <item name="tripProgressViewBackgroundColor">@color/car_nav_surface</item>
+        <item name="timeRemainingTextAppearance">@style/CarTripProgressTimeRemaining</item>
+        <item name="distanceRemainingTextAppearance">@style/CarTripProgressDistanceRemaining</item>
+        <item name="estimatedArrivalTimeTextAppearance">@style/CarTripProgressEta</item>
+        <item name="distanceRemainingIconTint">@color/car_nav_text_2</item>
+        <item name="estimatedArrivalTimeIconTint">@color/car_nav_text_2</item>
+    </style>
+
+</resources>

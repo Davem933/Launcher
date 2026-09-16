@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Tmavé barvy pro Mapboxí hotové navigační View (MapboxManeuverView / MapboxTripProgressView).
+  Hodnoty jsou 1:1 tokeny z ui/theme/CarColors.kt — XML resources jsou potřeba proto, že Mapbox
+  API (ManeuverViewOptions.maneuverBackgroundColor, styleable tripProgressViewBackgroundColor)
+  bere @ColorRes/@StyleRes ID, ne Compose Color.
+-->
+<resources>
+    <color name="car_nav_bg_2">#FF111318</color>        <!-- CarColors.Bg2 -->
+    <color name="car_nav_surface">#FF161820</color>     <!-- CarColors.Surface -->
+    <color name="car_nav_surface_2">#FF1E2029</color>   <!-- CarColors.Surface2 -->
+    <color name="car_nav_border">#FF2E3040</color>      <!-- CarColors.Border -->
+    <color name="car_nav_text">#FFF5F5FA</color>        <!-- CarColors.Text -->
+    <color name="car_nav_text_2">#FFB8BAC8</color>      <!-- CarColors.Text2 -->
+    <color name="car_nav_go">#FF5DBF7A</color>          <!-- CarColors.Go -->
+</resources>
