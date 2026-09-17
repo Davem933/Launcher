@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -111,6 +112,8 @@ import com.mapbox.navigation.ui.components.tripprogress.view.MapboxTripProgressV
 import com.mapbox.navigation.ui.maps.camera.NavigationCamera
 import com.mapbox.navigation.ui.maps.camera.data.MapboxNavigationViewportDataSource
 import com.mapbox.navigation.ui.maps.camera.lifecycle.NavigationBasicGesturesHandler
+import com.mapbox.navigation.ui.maps.camera.state.NavigationCameraState
+import com.mapbox.navigation.ui.maps.camera.state.NavigationCameraStateChangedObserver
 import com.mapbox.navigation.ui.maps.location.NavigationLocationProvider
 import com.mapbox.navigation.ui.maps.route.line.api.MapboxRouteLineApi
 import com.mapbox.navigation.ui.maps.route.line.api.MapboxRouteLineView
@@ -140,6 +143,13 @@ private const val CATEGORY_PIN_IMAGE_PREFIX = "category-pin-"
 // otherwise the overlap comes back silently.
 private val MANEUVER_BANNER_END_PADDING = 72.dp
 private val END_GUIDANCE_BUTTON_PADDING = 18.dp
+
+// "Locate me" button (autozen-style). Free-drive bottom padding matches the other free-drive
+// overlay padding (16dp). During navigation it must clear MapboxTripProgressView, which spans
+// the full BottomCenter width at 64dp tall — 24dp of margin above that keeps the button from
+// visually touching the progress bar.
+private val LOCATE_BUTTON_PADDING = 16.dp
+private val LOCATE_BUTTON_BOTTOM_PADDING_NAV = 64.dp + 24.dp
 
 private class MapState {
     var mapboxMap: MapboxMap? = null
@@ -196,6 +206,10 @@ fun MapWidget(
     val locationProvider = remember { AppLocationProvider() }
     var styleLoaded by remember { mutableStateOf(false) }
     var isFollowing by remember { mutableStateOf(true) }
+    // Mirrors NavigationCamera's own state (see the observer below) so the locate button can
+    // reflect whether the SDK's camera is actively following during turn-by-turn — separate from
+    // isFollowing above, which only governs the free-drive easeTo logic.
+    var isNavCameraFollowing by remember { mutableStateOf(false) }
 
     // MapboxNavigation instance for Task 3's route request/render (and Task 4's trip session).
     // `requireMapboxNavigation()` is a `LifecycleOwner` extension (not an Activity-only API) —
@@ -369,6 +383,22 @@ fun MapWidget(
         mapboxNavigation.registerRoutesObserver(routesObserver)
         onDispose {
             mapboxNavigation.unregisterRoutesObserver(routesObserver)
+        }
+    }
+
+    // Locate button state during navigation: NavigationCamera's own FOLLOWING/IDLE/OVERVIEW state
+    // (mapState.navigationCamera is already set by the AndroidView factory below by the time this
+    // runs, same pattern as mapState.viewportDataSource being read from LaunchedEffect(isNavigating)
+    // further down). Registered here, not inside the factory, since it's Compose state that must
+    // be unregistered on dispose like every other observer in this composable.
+    DisposableEffect(Unit) {
+        val observer = NavigationCameraStateChangedObserver { state ->
+            isNavCameraFollowing = state == NavigationCameraState.FOLLOWING ||
+                state == NavigationCameraState.TRANSITION_TO_FOLLOWING
+        }
+        mapState.navigationCamera?.registerNavigationCameraStateChangeObserver(observer)
+        onDispose {
+            mapState.navigationCamera?.unregisterNavigationCameraStateChangeObserver(observer)
         }
     }
 
@@ -813,6 +843,46 @@ fun MapWidget(
             }
         }
 
+        // "Moje poloha" — recenters on the current GPS fix, matching the locate-me button found
+        // in autozen and other navigation apps. Shown in both free-drive and active navigation
+        // (unlike the search bar/maneuver banner split above) since NavigationCamera doesn't
+        // resume following on its own after the user manually pans mid-route. Highlighted
+        // (CarColors.Accent) while the camera is actively following, dimmed otherwise — same
+        // convention as the reference app.
+        val isLocationFollowing = if (isNavigating) isNavCameraFollowing else isFollowing
+        IconButton(
+            onClick = {
+                if (isNavigating) {
+                    mapState.navigationCamera?.requestNavigationCameraToFollowing()
+                } else {
+                    isFollowing = true
+                    val currentLoc = location ?: return@IconButton
+                    val (snapLat, snapLng) = RouteSnapHelper.snapToRoute(
+                        currentLoc.lat, currentLoc.lng, viewModel.routePolyline.value
+                    )
+                    mapState.mapboxMap?.easeTo(
+                        CameraOptions.Builder()
+                            .center(Point.fromLngLat(snapLng, snapLat))
+                            .build(),
+                        MapAnimationOptions.mapAnimationOptions { duration(500) }
+                    )
+                }
+            },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(
+                    end = LOCATE_BUTTON_PADDING,
+                    bottom = if (isNavigating) LOCATE_BUTTON_BOTTOM_PADDING_NAV else LOCATE_BUTTON_PADDING,
+                )
+                .clip(CircleShape)
+                .background(if (isLocationFollowing) CarColors.Accent else CarColors.Surface2)
+        ) {
+            Icon(
+                imageVector = Icons.Default.MyLocation,
+                contentDescription = "Moje poloha",
+                tint = CarColors.Text
+            )
+        }
     }
 
     LaunchedEffect(location) {
