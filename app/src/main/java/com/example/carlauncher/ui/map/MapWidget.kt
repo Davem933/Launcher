@@ -7,17 +7,23 @@ import android.util.Log
 import com.example.carlauncher.R
 import com.example.carlauncher.data.model.Parking
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -25,6 +31,7 @@ import androidx.compose.foundation.border
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.carlauncher.ui.theme.CarColors
@@ -46,14 +53,17 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mapbox.bindgen.ExpectedFactory
 import com.mapbox.bindgen.Value
+import com.mapbox.common.Cancelable
 import com.mapbox.common.location.Location
 import com.mapbox.geojson.Feature
 import com.mapbox.geojson.FeatureCollection
 import com.mapbox.geojson.Point
 import com.mapbox.maps.CameraOptions
+import com.mapbox.maps.ClickInteraction
 import com.mapbox.maps.EdgeInsets
 import com.mapbox.maps.MapInitOptions
 import com.mapbox.maps.MapView
+import com.mapbox.maps.MapboxExperimental
 import com.mapbox.maps.MapboxMap
 import com.mapbox.maps.plugin.PuckBearing
 import com.mapbox.maps.plugin.animation.MapAnimationOptions
@@ -120,9 +130,14 @@ import com.mapbox.navigation.ui.maps.route.line.api.MapboxRouteLineView
 import com.mapbox.navigation.ui.maps.route.line.model.MapboxRouteLineApiOptions
 import com.mapbox.navigation.ui.maps.route.line.model.MapboxRouteLineViewOptions
 import com.mapbox.search.result.SearchResult
+import kotlin.math.roundToInt
 
 private const val TRAFFIC_SOURCE_ID = "traffic-source"
 private const val TRAFFIC_LAYER_ID = "traffic-congestion"
+
+// Mapbox Standard style's built-in POI featureset id — see the addInteraction() call site for
+// why this is a hardcoded literal rather than StandardPoi.FEATURESET_ID.
+private const val STANDARD_POI_FEATURESET_ID = "poi"
 
 private const val PARKING_IMAGE_ID = "parking-icon"
 private const val PARKING_SOURCE_ID = "parking-source"
@@ -160,7 +175,15 @@ private class MapState {
     // remembered fields, not Compose State — same rationale as mapboxMap/parkingSource above.
     var navigationCamera: NavigationCamera? = null
     var viewportDataSource: MapboxNavigationViewportDataSource? = null
+    // POI/parking tap popup — the two addInteraction() handles registered at style-load time,
+    // cancelled alongside every other MapWidget-scoped API in the lifecycle DisposableEffect.
+    var poiInteraction: Cancelable? = null
+    var parkingInteraction: Cancelable? = null
 }
+
+// A tapped POI (from the Standard style's built-in "poi" featureset) or one of our own parking
+// pins — backs the autozen-style popup with a name, distance and Navigate/Zrušit.
+private data class TappedPoi(val title: String, val point: Point)
 
 // Tracks the in-flight requestRoutes() call so a newer destination selection can cancel a
 // still-pending older one via MapboxNavigation.cancelRouteRequest — otherwise a slow route
@@ -179,6 +202,10 @@ private class LongHolder {
     var value: Long? = null
 }
 
+// MapboxMap.addInteraction()/ClickInteraction (POI/parking tap popup) are marked
+// @MapboxExperimental in SDK 11.30.1 — opted into like this codebase's other experimental APIs
+// (ExperimentalMaterial3Api etc.), not routed around.
+@OptIn(MapboxExperimental::class)
 @Composable
 fun MapWidget(
     modifier: Modifier = Modifier,
@@ -210,6 +237,9 @@ fun MapWidget(
     // reflect whether the SDK's camera is actively following during turn-by-turn — separate from
     // isFollowing above, which only governs the free-drive easeTo logic.
     var isNavCameraFollowing by remember { mutableStateOf(false) }
+    // Autozen-style popup for a tapped POI or parking pin (see the addInteraction() calls in the
+    // loadStyle callback below) — null when no popup is showing.
+    var tappedPoi by remember { mutableStateOf<TappedPoi?>(null) }
 
     // MapboxNavigation instance for Task 3's route request/render (and Task 4's trip session).
     // `requireMapboxNavigation()` is a `LifecycleOwner` extension (not an Activity-only API) —
@@ -348,6 +378,54 @@ fun MapWidget(
                 null,
                 null,
             ) { camera -> map.setCamera(camera) }
+        }
+    }
+
+    // Requests a route to [destination] and starts guidance immediately — shared by
+    // SearchOverlay's destination picker and the POI/parking popup's Navigovat button, so both
+    // go through the exact same superseded-request bookkeeping (see RouteRequestState's class
+    // doc: a chain of rapid picks could otherwise let a stale callback clobber a newer route).
+    val requestRoute: (Point) -> Unit = { destination ->
+        val currentLoc = location
+        if (currentLoc == null) {
+            routeRequestError = "Poloha není dostupná"
+        } else {
+            routeRequestError = null
+            routeRequestState.activeRequestId?.let { mapboxNavigation.cancelRouteRequest(it) }
+            val ownRequestId = LongHolder()
+            val callback = object : NavigationRouterCallback {
+                override fun onCanceled(routeOptions: RouteOptions, routerOrigin: String) {
+                    if (routeRequestState.activeRequestId == ownRequestId.value) {
+                        routeRequestState.activeRequestId = null
+                    }
+                }
+                override fun onFailure(reasons: List<RouterFailure>, routeOptions: RouteOptions) {
+                    if (routeRequestState.activeRequestId == ownRequestId.value) {
+                        routeRequestState.activeRequestId = null
+                        Log.e("MapWidget", "Route request failed: $reasons")
+                        routeRequestError = "Trasu se nepodařilo najít"
+                    }
+                }
+                override fun onRoutesReady(routes: List<NavigationRoute>, routerOrigin: String) {
+                    if (routeRequestState.activeRequestId == ownRequestId.value) {
+                        routeRequestState.activeRequestId = null
+                        mapboxNavigation.setNavigationRoutes(routes)
+                        mapboxNavigation.startTripSession()
+                    }
+                }
+            }
+            val requestId = mapboxNavigation.requestRoutes(
+                RouteOptions.builder()
+                    .applyDefaultNavigationOptions()
+                    .applyLanguageAndVoiceUnitOptions(context)
+                    .coordinatesList(
+                        listOf(Point.fromLngLat(currentLoc.lng, currentLoc.lat), destination)
+                    )
+                    .build(),
+                callback
+            )
+            ownRequestId.value = requestId
+            routeRequestState.activeRequestId = requestId
         }
     }
 
@@ -637,6 +715,38 @@ fun MapWidget(
                             parkingSource.featureCollection(parkingToFeatureCollection(pendingParking))
                         }
 
+                        // Autozen-style tap popup — POIs baked into the Standard basemap (shops,
+                        // restaurants, …) via Mapbox's typed "poi" featureset, and our own parking
+                        // pins via the plain layer-click variant (parking features carry no name
+                        // property, see parkingToFeatureCollection, hence the fixed title).
+                        // Registered here (style-load time) since the "poi" featureset only
+                        // resolves once the Standard basemap import it belongs to is present.
+                        // StandardPoi.FEATURESET_ID is `internal` to the SDK and
+                        // toFeaturesetDescriptor() surfaces it back as a nullable String (its
+                        // Kotlin declaration, not just missing annotations — confirmed by the
+                        // compiler, not assumed) — so this app's own copy is hardcoded instead,
+                        // confirmed against StandardPoi's bytecode (ui-maps/base 11.30.1): it
+                        // builds FeaturesetDescriptor("poi", importId, null) internally.
+                        mapState.poiInteraction = mapboxMap.addInteraction(
+                            ClickInteraction.featureset(STANDARD_POI_FEATURESET_ID, TileConfig.STANDARD_IMPORT_ID) { feature, _ ->
+                                val point = feature.geometry as? Point
+                                if (point != null) {
+                                    val name = feature.properties.optString("name", "").ifBlank { "Bod zájmu" }
+                                    tappedPoi = TappedPoi(name, point)
+                                }
+                                true
+                            }
+                        )
+                        mapState.parkingInteraction = mapboxMap.addInteraction(
+                            ClickInteraction.layer(PARKING_LAYER_ID) { feature, _ ->
+                                val point = feature.geometry as? Point
+                                if (point != null) {
+                                    tappedPoi = TappedPoi("Parkoviště", point)
+                                }
+                                true
+                            }
+                        )
+
                         // Numbered pins for category search results (SearchOverlay) — registered
                         // once here, referenced later by id when results actually arrive.
                         for (n in 1..MAX_CATEGORY_PINS) {
@@ -680,7 +790,7 @@ fun MapWidget(
         // overlay owns its own search/category/history logic — this composable only supplies
         // the current GPS fix and the route-request callback, exactly as it did for the old
         // single-widget search bar.
-        if (!isNavigating && !searchExpanded) {
+        if (!isNavigating && !searchExpanded && tappedPoi == null) {
             Column(
                 modifier = Modifier
                     .align(Alignment.TopStart)
@@ -703,77 +813,79 @@ fun MapWidget(
                 currentLocation = location,
                 onDismiss = { searchExpanded = false },
                 onCategoryResultsChanged = updateCategoryPins,
-                onDestinationSelected = { point, _ ->
-                        val currentLoc = location
-                        if (currentLoc == null) {
-                            routeRequestError = "Poloha není dostupná"
-                            return@SearchOverlay
-                        }
-                        routeRequestError = null
-                        // Cancel any still-pending request from a previous destination pick so its
-                        // callback can't land after (and overwrite) this newer one's route.
-                        routeRequestState.activeRequestId?.let { mapboxNavigation.cancelRouteRequest(it) }
-                        // The callback needs to know which request it belongs to so it can tell
-                        // whether it's still the authoritative (most recent) one by the time it
-                        // fires — requestRoutes() only returns that id after being called, so the
-                        // callback captures this mutable holder and it's filled in right after.
-                        // A chain of 3+ rapid selections can otherwise let a stale callback (e.g.
-                        // request B's onCanceled, fired as a side effect of cancelling B for C) wipe
-                        // out activeRequestId while it actually holds a newer request's id (C's),
-                        // untracking it — or worse, let a stale onRoutesReady call
-                        // setNavigationRoutes() with an outdated route after a newer one already
-                        // rendered. Comparing against activeRequestId before acting closes both.
-                        val ownRequestId = LongHolder()
-                        val callback = object : NavigationRouterCallback {
-                            override fun onCanceled(routeOptions: RouteOptions, routerOrigin: String) {
-                                if (routeRequestState.activeRequestId == ownRequestId.value) {
-                                    routeRequestState.activeRequestId = null
-                                }
-                            }
-                            override fun onFailure(reasons: List<RouterFailure>, routeOptions: RouteOptions) {
-                                if (routeRequestState.activeRequestId == ownRequestId.value) {
-                                    routeRequestState.activeRequestId = null
-                                    Log.e("MapWidget", "Route request failed: $reasons")
-                                    routeRequestError = "Trasu se nepodařilo najít"
-                                }
-                            }
-                            override fun onRoutesReady(routes: List<NavigationRoute>, routerOrigin: String) {
-                                // Only apply this result — and only clear the tracked id — if no
-                                // newer request has since taken ownership of activeRequestId. A
-                                // superseded (stale) result must never overwrite a newer route.
-                                if (routeRequestState.activeRequestId == ownRequestId.value) {
-                                    routeRequestState.activeRequestId = null
-                                    mapboxNavigation.setNavigationRoutes(routes)
-                                    // Task 4: this plan has no separate route-preview/"Start" step —
-                                    // guidance begins immediately once a route is ready (spec §3 flow).
-                                    // No `isNavigating = true` here: startTripSession() sets
-                                    // TripSessionState.STARTED synchronously (MapboxTripSession.start()),
-                                    // which notifies the TripSessionStateObserver above inline — and if
-                                    // the session did NOT actually start (MapboxNavigation guards this
-                                    // with runIfNotDestroyed), leaving the flag alone is the correct
-                                    // outcome rather than showing guidance UI over nothing.
-                                    mapboxNavigation.startTripSession()
-                                }
-                            }
-                        }
-                        val requestId = mapboxNavigation.requestRoutes(
-                            RouteOptions.builder()
-                                .applyDefaultNavigationOptions()
-                                .applyLanguageAndVoiceUnitOptions(context)
-                                .coordinatesList(
-                                    listOf(
-                                        Point.fromLngLat(currentLoc.lng, currentLoc.lat),
-                                        point
-                                    )
-                                )
-                                .build(),
-                            callback
-                        )
-                        ownRequestId.value = requestId
-                        routeRequestState.activeRequestId = requestId
-                    },
+                onDestinationSelected = { point, _ -> requestRoute(point) },
                 modifier = Modifier.fillMaxSize()
             )
+        }
+
+        // Autozen-style POI/parking popup — mutually exclusive with the search bar/overlay above
+        // (both would otherwise fight for the same TopStart/TopCenter real estate). Only Dismiss
+        // and Navigovat close it; there's no generic map-click fallback in this iteration (see
+        // the "only real POI + parking" scope decision), so tapping empty map elsewhere leaves it
+        // open.
+        val poi = tappedPoi
+        if (!isNavigating && poi != null) {
+            val distanceText = remember(poi, location) {
+                val currentLoc = location ?: return@remember null
+                val results = FloatArray(1)
+                android.location.Location.distanceBetween(
+                    currentLoc.lat, currentLoc.lng, poi.point.latitude(), poi.point.longitude(), results
+                )
+                formatPoiDistance(results[0])
+            }
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(CarColors.Surface2)
+                    .padding(20.dp)
+            ) {
+                Text(text = poi.title, color = CarColors.Text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                if (distanceText != null) {
+                    Text(
+                        text = distanceText,
+                        color = CarColors.Text2,
+                        fontSize = 15.sp,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+                Row(
+                    modifier = Modifier.padding(top = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(28.dp))
+                            .border(1.dp, CarColors.BorderSoft, RoundedCornerShape(28.dp))
+                            .clickable { tappedPoi = null }
+                            .padding(vertical = 14.dp),
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        Icon(Icons.Default.Close, contentDescription = null, tint = CarColors.Text2)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Zrušit", color = CarColors.Text2, fontSize = 16.sp)
+                    }
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(28.dp))
+                            .background(CarColors.Accent)
+                            .clickable {
+                                tappedPoi = null
+                                requestRoute(poi.point)
+                            }
+                            .padding(vertical = 14.dp),
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        Icon(Icons.Default.Navigation, contentDescription = null, tint = CarColors.Text)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Navigovat", color = CarColors.Text, fontSize = 16.sp)
+                    }
+                }
+            }
         }
 
         // Active turn-by-turn overlays — maneuver banner (TopCenter, replaces the search bar
@@ -970,12 +1082,19 @@ fun MapWidget(
                 // and shutting it down on a panel switch is exactly the bug that fix removes.
                 routeLineApi.cancel()
                 routeLineView.cancel()
+                mapState.poiInteraction?.cancel()
+                mapState.parkingInteraction?.cancel()
                 maneuverApi.cancel()
                 mapView.onDestroy()
             }
         }
     }
 }
+
+// Matches the maneuver banner / trip progress view's own metric formatting convention (this app
+// has no imperial-units path — applyLanguageAndVoiceUnitOptions derives units from device locale).
+private fun formatPoiDistance(meters: Float): String =
+    if (meters < 1000f) "${meters.roundToInt()} m" else "%.1f km".format(meters / 1000f)
 
 /**
  * Tmavý styl pro MapboxManeuverView. Na rozdíl od MapboxTripProgressView tohle View nemá
