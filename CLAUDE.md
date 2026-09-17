@@ -80,11 +80,14 @@ service/
 
 ## Dual-screen layout (HorizontalPager)
 
-`MainActivity` má `HorizontalPager` se dvěma stranami (dot indikátor nad DockBar):
+`MainActivity` má `HorizontalPager` se třemi stranami (dot indikátor nad DockBar):
 - **Page 0** — `LauncherScreen` (mapa + hudba + navigace + počasí)
 - **Page 1** — `WidgetScreen` (Android AppWidget grid)
+- **Page 2** — `TripScreen` (Trip Computer + Jízdní deník)
 
-Přechod swipe doleva/doprava. `beyondViewportPageCount = 1` → obě stránky jsou preloadnuty.
+Přechod swipe doleva/doprava. `beyondViewportPageCount = 1` → všechny stránky jsou preloadnuté.
+
+**Konflikt swipe mapy vs. swipe stránek** — viz Module: MapNavPanel níže (`trackTouchActive`) pro fix, kdy `HorizontalPager` kradl vodorovné tahy na mapě.
 
 ## LauncherScreen Layout
 
@@ -117,6 +120,8 @@ Levý panel (~65% šířky) přepíná mezi `MapWidget` a `NavAreaWidget` dlouh�
 Dlouhý stisk otevře `ModalBottomSheet` s kartami "Mapa"/"Navigace" — je to **jediná** cesta k přepnutí panelu (tlačítko "Navigovat" v `MapWidget`u bylo odstraněno).
 
 **Pozor při úpravách:** lokální composable proměnná pojmenovaná `location` (GPS fix) stíní `MapView.location` (Mapbox location-component plugin extension property) uvnitř `mapView.apply { }` bloků — vždy použít `this.location`, jinak dostane "Unresolved reference" na Mapbox API bez zjevné příčiny.
+
+**`trackTouchActive()`** — neconsuming `pointerInput` (`PointerEventPass.Initial`, stejný vzor jako `detectPanelLongPress` výše) hlásící přes `onTouchActiveChanged: (Boolean) -> Unit`, jestli je aktuálně alespoň jeden prst dole kdekoliv v panelu. Proplácnuté přes `LauncherScreen` až do `MainActivity`, kde vypíná `HorizontalPager`'s `userScrollEnabled` po dobu doteku — Compose `HorizontalPager` není `ViewGroup` a nemá `requestDisallowInterceptTouchEvent`, takže bez tohohle uměl vodorovný (i diagonální) tah na mapě skončit jako přepnutí stránky místo panu. Swipe na přepnutí stránky mimo mapový panel (pravý sloupec, DockBar) tím není dotčený.
 
 ## Module: Navigation (notifikační — Google Maps / Mapy.cz / …)
 
@@ -161,6 +166,8 @@ Přešlo z MapLibre + offline PMTiles na **Mapbox Maps SDK** (`com.mapbox.maps:a
 
 **Mapboxovo vlastní měřítko** (ruler "50 m / 100 m" vlevo nahoře) je defaultně zapnuté a bylo vypnuto přes `mapView.scalebar.enabled = false` (plugin `com.mapbox.maps.plugin.scalebar.scalebar`), nastaveno hned po vytvoření mapy spolu s ostatní plugin konfigurací.
 
+**Tlačítko "Moje poloha"** (autozen styl, `BottomEnd`) — okamžitě vycentruje kameru na aktuální GPS fix a znovu zapne auto-sledování, místo čekání na automatické obnovení po 10s bez doteku (`LaunchedEffect(isFollowing)`). Barva kroužku ukazuje, jestli kamera aktivně sleduje: `CarColors.Accent` když ano, `CarColors.Surface2` když si uživatel mapou pohnul. Za jízdy (`isNavigating`) má vlastní zdroj pravdy — `NavigationCameraStateChangedObserver` registrovaný na `mapState.navigationCamera` (stavy `FOLLOWING`/`TRANSITION_TO_FOLLOWING`) — protože Mapboxí `NavigationCamera` se po ručním posunu sama do sledování nevrátí; tlačítko pak volá `requestNavigationCameraToFollowing()` místo ručního `easeTo`.
+
 ## Module: Navigace přes Mapbox (Fáze 3) — MapWidget.kt + DestinationSearchBar.kt + SearchOverlay.kt
 
 Turn-by-turn počítaný přímo v appce přes **Mapbox Navigation SDK + Search Box SDK**, jako druhá možnost vedle notifikační navigace výše (ta zůstává beze změny). Celé to žije jako overlay nad `MapWidget`em, přepínané stavem `isNavigating`.
@@ -201,6 +208,14 @@ Turn-by-turn počítaný přímo v appce přes **Mapbox Navigation SDK + Search 
 **Overlaye při navigaci:** maneuver banner (`MapboxManeuverView`, TopCenter, `end = MANEUVER_BANNER_END_PADDING` = 72dp aby text nelezl pod tlačítko Ukončit — to zabírá 18dp padding + 48dp minimální touch target Material3 `IconButton`u = 66dp od pravé hrany, zbývá 6dp vzduchu; obě čísla jsou pojmenované konstanty v `MapWidget.kt`, při změně tlačítka přepočítat) + trip progress (`MapboxTripProgressView`, BottomCenter, 64dp). `SpeedDisplay` a tlačítko "Navigovat", které dřív sdílely tenhle spodní pás, byly od té doby z appky úplně odstraněné (ne jen skryté po dobu navigace).
 
 **Tmavý styl obou hotových View:** SDK defaulty jsou světlé — `MapboxTripProgressView` má pozadí `@color/colorSurface` = **bílá** (i v Mapboxím `values-night`), tedy v noci svítící pruh přes celou spodní hranu mapy; maneuver banner je modrošedý `#37516F`. Řeší to `res/values/nav_colors.xml` (tokeny 1:1 z `CarColors.kt`) + `res/values/nav_styles.xml` (styly dědí z originálních `MapboxStyle*` a přebíjí jen barvy). XML je nutné, protože Mapbox API bere `@ColorRes`/`@StyleRes`, ne Compose `Color`. Aplikuje se v `factory` bloku: `MapboxTripProgressView.updateStyle(R.style.CarTripProgressView)`, `MapboxManeuverView.updateManeuverViewOptions(darkManeuverViewOptions())` — maneuver View **nemá** `updateStyle`, jediná runtime cesta jsou `ManeuverViewOptions`. `tripProgressViewBackgroundColor` **musí být reference na `@color/`**, ne barevný literál — View ho čte přes `getResourceId()` a posílá do `ContextCompat.getColor()`.
+
+**POI/parkoviště tap popup (autozen styl)** — klik na POI ze Standard stylu (obchody, restaurace, …) nebo na fialový parkovací pin ukáže kartu se jménem, vzdáleností a tlačítky Zrušit/Navigovat. Používá novější Mapbox `MapboxMap.addInteraction()`/`ClickInteraction` API (`@MapboxExperimental`, opt-in stejně jako `ExperimentalMaterial3Api` jinde v appce) místo klasického `addOnMapClickListener` + `queryRenderedFeatures`:
+- `ClickInteraction.featureset(...)` na Standard stylu vestavěný `"poi"` featureset. `StandardPoi.FEATURESET_ID` je ale `internal` v SDK 11.30.1 (ověřeno kompilátorem, ne odhad), takže id je zkopírované jako string literál (`STANDARD_POI_FEATURESET_ID`), potvrzené z bytecode `StandardPoi`u (`ui-maps/base` aar), ne z veřejného API.
+- `ClickInteraction.layer(PARKING_LAYER_ID, ...)` pro vlastní parkovací piny — ty nemají žádnou `name` property (`parkingToFeatureCollection` staví feature jen z geometrie), proto pevný titulek "Parkoviště".
+- Vzdálenost přes `android.location.Location.distanceBetween(...)` — plně kvalifikované, protože `com.mapbox.common.location.Location` je v souboru už importované pod stejným krátkým jménem.
+- Oba `addInteraction()` handly (`Cancelable`) se ukládají do `MapState` a ruší ve stejném `onDispose`, kde se cancelují `routeLineApi`/`routeLineView`/`maneuverApi`.
+- Scope je záměrně jen "skutečné POI + parkoviště" — žádný obecný klik kamkoliv na mapu s reverse geocodingem (na rozdíl od referenční appky).
+- Tlačítko Navigovat volá sdílenou `requestRoute(Point)` — tu samou funkci jako výběr cíle v `SearchOverlay`u (dřív duplikovaná inline v `onDestinationSelected`, teď extrahovaná).
 
 ## Module: SpeedLimit (data/speedlimit/SpeedLimitRepository.kt)
 
