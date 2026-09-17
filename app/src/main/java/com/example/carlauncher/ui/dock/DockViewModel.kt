@@ -33,6 +33,8 @@ private val DEFAULT_SLOTS = listOf(
     DockSlot.App("com.google.android.apps.youtube.music"),
     DockSlot.App("com.google.android.apps.maps"),
     DockSlot.App("cz.seznam.mapy"),
+    DockSlot.Empty,
+    DockSlot.Empty,
     DockSlot.SplitScreen(
         packageName1 = "com.waze",
         packageName2 = "com.google.android.apps.youtube.music",
@@ -42,9 +44,7 @@ private val DEFAULT_SLOTS = listOf(
         packageName1 = "com.tomtom.speedcams.android.map",   // verified via PackageCheck logcat
         packageName2 = "com.google.android.apps.youtube.music",
         label        = "TomTom + Hudba"
-    ),
-    DockSlot.Empty,
-    DockSlot.Empty
+    )
 )
 
 @HiltViewModel
