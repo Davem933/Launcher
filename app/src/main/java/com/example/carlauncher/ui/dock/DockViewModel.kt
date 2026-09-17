@@ -29,7 +29,7 @@ private val DOCK_KEY = stringPreferencesKey("dock_slots_v2")
 private const val SLOT_COUNT = 8
 
 private val DEFAULT_SLOTS = listOf(
-    DockSlot.App("com.google.android.dialer"),
+    DockSlot.App("com.android.vending"),
     DockSlot.App("com.google.android.apps.youtube.music"),
     DockSlot.App("com.google.android.apps.maps"),
     DockSlot.App("cz.seznam.mapy"),
