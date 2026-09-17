@@ -20,7 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Apps
@@ -36,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
@@ -52,7 +53,9 @@ import com.example.carlauncher.ui.theme.CarColors
 private val DockBorderTop = Color(0xFF252530)
 private val SlotBg        = Color(0xFF1A1A28)
 private val SlotBorder    = Color(0xFF2A2A38)
-private val SlotShape     = RoundedCornerShape(14.dp)
+private val SlotShape     = CircleShape
+private val MenuSize      = 48.dp
+private val SlotSize      = 60.dp
 
 @Composable
 fun DockBar(
@@ -64,45 +67,49 @@ fun DockBar(
     var editMode   by remember { mutableStateOf(false) }
     var pickerSlot by remember { mutableIntStateOf(-1) }
 
+    // No shelf/card background — tiles float directly over whatever is behind the dock,
+    // each tile carries its own shadow for legibility instead.
     Box(
         modifier = modifier
             .fillMaxWidth()
             .size(88.dp)
-            .clip(RoundedCornerShape(24.dp))
-            .background(CarColors.Surface)
-            .border(width = 1.dp, color = CarColors.BorderSoft, shape = RoundedCornerShape(24.dp))
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.Center)
                 .padding(horizontal = 20.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Slot 0 — fixed Menu icon, not configurable
+            // Left cluster — fixed Menu icon, not configurable
             MenuTile(onClick = { viewModel.openAppDrawer() })
 
-            // Slots 1–6 — configurable app slots
-            slots.forEachIndexed { index, slot ->
-                DockSlotTile(
-                    slot        = slot,
-                    editMode    = editMode,
-                    onClick     = {
-                        if (editMode) {
-                            pickerSlot = index
-                        } else {
-                            when (slot) {
-                                is DockSlot.App         -> viewModel.launchApp(slot.packageName)
-                                is DockSlot.SplitScreen -> onLaunchSplitScreen(
-                                    slot.packageName1, slot.packageName2)
-                                DockSlot.Empty          -> { pickerSlot = index; editMode = true }
-                                DockSlot.Navigate       -> viewModel.launchNavigation()
+            // Right cluster — configurable app slots
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                slots.forEachIndexed { index, slot ->
+                    DockSlotTile(
+                        slot        = slot,
+                        editMode    = editMode,
+                        onClick     = {
+                            if (editMode) {
+                                pickerSlot = index
+                            } else {
+                                when (slot) {
+                                    is DockSlot.App         -> viewModel.launchApp(slot.packageName)
+                                    is DockSlot.SplitScreen -> onLaunchSplitScreen(
+                                        slot.packageName1, slot.packageName2)
+                                    DockSlot.Empty          -> { pickerSlot = index; editMode = true }
+                                    DockSlot.Navigate       -> viewModel.launchNavigation()
+                                }
                             }
-                        }
-                    },
-                    onLongClick = { editMode = true; pickerSlot = index }
-                )
+                        },
+                        onLongClick = { editMode = true; pickerSlot = index }
+                    )
+                }
             }
         }
     }
@@ -129,10 +136,10 @@ fun DockBar(
 private fun MenuTile(onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .size(52.dp)
+            .size(MenuSize)
+            .shadow(6.dp, SlotShape, clip = false)
             .clip(SlotShape)
             .background(CarColors.Surface2)
-            .border(1.dp, CarColors.Border, SlotShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
@@ -140,7 +147,7 @@ private fun MenuTile(onClick: () -> Unit) {
             imageVector = Icons.Default.Apps,
             contentDescription = "Všechny aplikace",
             tint = CarColors.Text,
-            modifier = Modifier.size(26.dp)
+            modifier = Modifier.size(22.dp)
         )
     }
 }
@@ -167,7 +174,7 @@ private fun DockSlotTile(
 
     Box(
         modifier = Modifier
-            .size(64.dp)
+            .size(SlotSize + 4.dp)
             .graphicsLayer { rotationZ = wiggle.value }
             .pointerInput(Unit) {
                 awaitEachGesture {
@@ -201,7 +208,13 @@ private fun DockSlotTile(
 @Composable
 private fun AppTile(packageName: String) {
     val icon = rememberAppIcon(packageName)
-    AppIcon(drawable = icon, modifier = Modifier.size(52.dp).clip(SlotShape))
+    AppIcon(
+        drawable = icon,
+        modifier = Modifier
+            .size(SlotSize)
+            .shadow(6.dp, SlotShape, clip = false)
+            .clip(SlotShape)
+    )
 }
 
 @Composable
@@ -211,7 +224,8 @@ private fun SplitTile(pkg1: String, pkg2: String) {
 
     Box(
         modifier = Modifier
-            .size(52.dp)
+            .size(SlotSize)
+            .shadow(6.dp, SlotShape, clip = false)
             .clip(SlotShape)
             .background(SlotBg)
     ) {
@@ -220,19 +234,19 @@ private fun SplitTile(pkg1: String, pkg2: String) {
             Box(Modifier.width(1.dp).fillMaxHeight().background(DockBorderTop))
             AppIcon(icon2, Modifier.weight(1f).fillMaxHeight())
         }
-        // Split badge — bottom-right corner
+        // Split badge — bottom-right, round to match the circular tile
         Box(
             modifier = Modifier
-                .size(16.dp)
+                .size(18.dp)
                 .align(Alignment.BottomEnd)
-                .background(Color(0xCC101018), RoundedCornerShape(topStart = 4.dp)),
+                .background(Color(0xCC101018), CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.CallSplit,
                 contentDescription = null,
                 tint = Color(0xFF888899),
-                modifier = Modifier.size(12.dp)
+                modifier = Modifier.size(11.dp)
             )
         }
     }
@@ -242,8 +256,8 @@ private fun SplitTile(pkg1: String, pkg2: String) {
 private fun EmptyTile() {
     Box(
         modifier = Modifier
-            .size(52.dp)
-            .background(SlotBg, SlotShape)
+            .size(SlotSize)
+            .background(SlotBg.copy(alpha = 0.6f), SlotShape)
             .border(1.dp, SlotBorder, SlotShape),
         contentAlignment = Alignment.Center
     ) {
