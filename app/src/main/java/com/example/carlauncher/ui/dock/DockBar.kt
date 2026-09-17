@@ -41,10 +41,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationException
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.carlauncher.data.model.DockSlot
@@ -187,8 +187,12 @@ private fun DockSlotTile(
                             if (up != null) onClick()   // prst zvednut před timeoutem → tap
                             // up == null → gesto zrušeno jiným handlerem → nic
                         }
-                    } catch (_: TimeoutCancellationException) {
-                        // Prst stále dole po 1.5s → skutečný long press
+                    } catch (_: PointerEventTimeoutCancellationException) {
+                        // Prst stále dole po 1.5s → skutečný long press.
+                        // waitForUpOrCancellation() throws Compose's own
+                        // PointerEventTimeoutCancellationException on timeout, NOT
+                        // kotlinx.coroutines.TimeoutCancellationException — catching the
+                        // wrong type here silently swallowed every long-press forever.
                         onLongClick()
                         waitForUpOrCancellation()
                     }
