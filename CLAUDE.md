@@ -27,7 +27,7 @@ $adb = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
 & $adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-ADB logcat tags: `NavRaw`, `NavListener`, `MediaDebug`, `SpeedLimit`, `MapWidget`, `DockViewModel`, `ParkingRepository`, `MapViewModel`, `DestinationSearchBar`, `MapboxVoice`
+ADB logcat tags: `NavRaw`, `NavListener`, `MediaDebug`, `SpeedLimit`, `MapWidget`, `DockViewModel`, `ParkingRepository`, `MapViewModel`, `SearchOverlay`, `MapboxVoice`, `MapboxArrival`
 
 **Mapbox setup (required to build):** two tokens, neither committed to git in principle —
 - `MAPBOX_ACCESS_TOKEN` (public, `pk.…`) in `local.properties` → `BuildConfig.MAPBOX_ACCESS_TOKEN` → set via `MapboxOptions.accessToken` in `CarLauncherApp.onCreate()`.
@@ -40,14 +40,14 @@ Single-module app (`app/`). Package structure:
 
 ```
 ui/
-  launcher/     LauncherScreen, LauncherViewModel, StatusBar
+  launcher/     LauncherScreen, LauncherViewModel
                 MapNavPanel (dlouhý stisk přepíná Mapa ↔ Navigace)
                 WeatherCalendarWidget + ViewModel (počasí + kalendář)
                 SystemControlsWidget (hlasitost + jas)
   navigation/   NavAreaWidget (podmíněný wrapper), NavWidget (notifikační turn-by-turn)
   map/          MapWidget, MapViewModel, TileConfig, AppLocationProvider
-                DestinationSearchBar (Mapbox Search Box)
-  speed/        SpeedDisplay
+                DestinationSearchBar (kompaktní spouštěč), SearchOverlay (Mapbox Search Box,
+                kategorie, historie, hlas), SearchCategory (POI kategorie)
   music/        MusicWidget, MediaViewModel
   dock/         DockBar, DockViewModel, SlotPicker
   widgets/      WidgetScreen, WidgetViewModel, LongPressWidgetHost, WidgetLayoutTemplate
@@ -55,7 +55,8 @@ ui/
 data/
   location/     LocationRepository, LocationProcessor, KalmanFilter
   navigation/   NavRepository (Compose singleton object, notifikační navigace)
-                MapboxVoiceGuidanceObserver (hlas Mapbox navigace, app-level)
+                MapboxVoiceGuidanceObserver, MapboxArrivalTeardownObserver (Mapbox navigace,
+                oba registrované na app-level, ne v kompozici)
   speedlimit/   SpeedLimitRepository (Nominatim reverse geocoding)
   weather/      WeatherRepository (Open-Meteo API)
   calendar/     CalendarRepository (CalendarContract.Instances)
@@ -89,7 +90,6 @@ Přechod swipe doleva/doprava. `beyondViewportPageCount = 1` → obě stránky j
 
 ```
 Column(fillMaxSize, bg = CarColors.Bg) {
-    StatusBar(44dp)                        ← čas HH:mm + české datum | baterie, WiFi, GPS tečka
     Box(weight 1f) {
         Row(p = 12/8dp, spacing 12dp) {
             MapNavPanel(weight 1.85f)      ← ~65% šířka: MapWidget (default) nebo NavAreaWidget,
@@ -106,7 +106,7 @@ Column(fillMaxSize, bg = CarColors.Bg) {
 }
 ```
 
-`SpeedDisplay` je uvnitř `MapWidget` v `BottomStart` s `padding(18dp)` — skrytý po dobu aktivní Mapbox navigace (kolize s trip progress barem, viz Module: Navigace přes Mapbox).
+Žádná horní stavová lišta (čas/baterie/WiFi/GPS) — záměrně odstraněná, aby mapový panel měl víc místa; čas/datum vidět jen v jiných appkách přes DockBar.
 
 ## Module: MapNavPanel (ui/launcher/MapNavPanel.kt)
 
@@ -114,7 +114,7 @@ Levý panel (~65% šířky) přepíná mezi `MapWidget` a `NavAreaWidget` dlouh�
 
 `resolveEffectiveView(isNavActive, manualView)` je čistá funkce: `NavRepository.isActive == true` vždy vyhraje (bezpečnostní priorita) bez ohledu na ruční volbu; jinak poslední ruční volba v této relaci, nebo `MAP` jako výchozí. Stav je jen v `remember` (ne DataStore) — resetuje se na Mapu po restartu.
 
-Dlouhý stisk otevře `ModalBottomSheet` s kartami "Mapa"/"Navigace". Tlačítko "Navigovat" v `MapWidget` (`onNavigate` callback) přepne panel na `NavAreaWidget`.
+Dlouhý stisk otevře `ModalBottomSheet` s kartami "Mapa"/"Navigace" — je to **jediná** cesta k přepnutí panelu (tlačítko "Navigovat" v `MapWidget`u bylo odstraněno).
 
 **Pozor při úpravách:** lokální composable proměnná pojmenovaná `location` (GPS fix) stíní `MapView.location` (Mapbox location-component plugin extension property) uvnitř `mapView.apply { }` bloků — vždy použít `this.location`, jinak dostane "Unresolved reference" na Mapbox API bez zjevné příčiny.
 
@@ -159,13 +159,32 @@ Přešlo z MapLibre + offline PMTiles na **Mapbox Maps SDK** (`com.mapbox.maps:a
 
 **Nedostupné offline:** žádný fallback bez signálu (na rozdíl od starého MapLibre+PMTiles řešení) — přijaté riziko.
 
-## Module: Navigace přes Mapbox (Fáze 3) — MapWidget.kt + DestinationSearchBar.kt
+**Mapboxovo vlastní měřítko** (ruler "50 m / 100 m" vlevo nahoře) je defaultně zapnuté a bylo vypnuto přes `mapView.scalebar.enabled = false` (plugin `com.mapbox.maps.plugin.scalebar.scalebar`), nastaveno hned po vytvoření mapy spolu s ostatní plugin konfigurací.
+
+## Module: Navigace přes Mapbox (Fáze 3) — MapWidget.kt + DestinationSearchBar.kt + SearchOverlay.kt
 
 Turn-by-turn počítaný přímo v appce přes **Mapbox Navigation SDK + Search Box SDK**, jako druhá možnost vedle notifikační navigace výše (ta zůstává beze změny). Celé to žije jako overlay nad `MapWidget`em, přepínané stavem `isNavigating`.
 
 **Instance `MapboxNavigation`:** `MapboxNavigationApp.setup()` v `CarLauncherApp.onCreate()`, v `MapWidget`u se bere přes `remember { lifecycleOwner.requireMapboxNavigation() }` (kvůli side-effectu attachnutí) + `MapboxNavigationApp.current()`. `by requireMapboxNavigation()` v `@Composable` **nejde** — delegát má `getValue(thisRef: Any, …)`, ale lokální delegovaná property potřebuje nullable `thisRef` (ověřeno kompilátorem, ne odhad). `lifecycleOwner` je `context as ComponentActivity`, ne `LocalLifecycleOwner` (ten je per-page z `HorizontalPager`u a nemusí dojet na RESUMED).
 
-**Hledání cíle — `DestinationSearchBar`:** Search Box SDK (`SearchEngine`, `ApiType.SEARCH_BOX`), dvoukrokové: `search(query)` → `SearchSuggestion`y (**bez souřadnic**), pak `select(suggestion)` → `SearchResult` se souřadnicí. `SearchSelectionCallback` má tři úspěšné větve: `onResult` (konkrétní místo), `onResults` (kategorie/brand → bere se první, tj. nejbližší dle `proximity`), `onSuggestions` (dotazová sugesce se rozbalí na další sugesce, ne na místo). Debounce 300 ms, min. 2 znaky. `proximity` se čte přes `rememberUpdatedState` — kdyby byl `LaunchedEffect` keyovaný přímo na `currentLocation`, každý GPS tick (500 ms) by debounce zrušil a za jízdy by hledání nikdy neodešlo. Vždy viditelný overlay v `TopCenter`, skrytý při `isNavigating` (tam je to místo obsazené maneuver bannerem).
+**Hledání cíle — dva composables.** `DestinationSearchBar` je jen kompaktní, na obsah velké spouštěcí tlačítko (lupa + "Hledat"), top-left přes mapu, žádná search logika. Ťuknutí přepne `MapWidget`ův `searchExpanded` stav a nahradí ho `SearchOverlay` — celopanelový takeover (kryje celý mapový panel, ne jen `TopCenter` slot), který vlastní všechnu logiku hledání/kategorií/historie/hlasu. Oba composables jsou skryté při `isNavigating` (to místo zabírá maneuver banner).
+
+`SearchOverlay` má tři vzájemně se vylučující stavy podle `query`/`activeCategory`:
+- **prázdný dotaz, žádná kategorie** — řádek POI kategorií (`SearchCategory.kt`) + "Nedávná hledání".
+- **prázdný dotaz, aktivní kategorie** — samostatná obrazovka (název kategorie jako nadpis, zpět se vrací na předchozí stav, ne zavírá celý overlay) s očíslovaným seznamem + odpovídajícími piny na mapě, viz níže.
+- **nějaký dotaz** — živé `SearchSuggestion`y, stejný dvoukrokový flow jako dřív.
+
+**Textové hledání:** Search Box SDK (`SearchEngine`, `ApiType.SEARCH_BOX`), dvoukrokové: `search(query)` → `SearchSuggestion`y (**bez souřadnic**), pak `select(suggestion)` → `SearchResult` se souřadnicí. `SearchSelectionCallback` má tři úspěšné větve: `onResult` (konkrétní místo), `onResults` (kategorie/brand → bere se první, tj. nejbližší dle `proximity`), `onSuggestions` (dotazová sugesce se rozbalí na další sugesce, ne na místo). Debounce 300 ms, min. 2 znaky. `proximity` se čte přes `rememberUpdatedState` — kdyby byl `LaunchedEffect` keyovaný přímo na `currentLocation`, každý GPS tick (500 ms) by debounce zrušil a za jízdy by hledání nikdy neodešlo.
+
+**Historie nedávných hledání** — Mapboxí vlastní `ServiceProvider.INSTANCE.historyDataProvider()` (`HistoryDataProvider`, disk-perzistovaný, dedup podle `id`), ne vlastní DataStore. Zápis přes `upsert(HistoryRecord(...))` po každém výběru; opětovný výběr existující položky jen posune `timestamp` nahoru (bump na vrch seznamu, ne duplicita). `HistoryRecord`'s konstruktor bere starý (deprecated) `SearchResultType`, ne nový `NewSearchResultType` — nedeprekovaná varianta potřebuje interní mapping nedostupný mimo SDK modul, takže `@Suppress("DEPRECATION")` je tu záměrný, ne přehlédnutý warning (stejný vzor jako SDK's vlastní `HistoryRecord.kt`).
+
+**Hlasové hledání** — systémový `RecognizerIntent.ACTION_RECOGNIZE_SPEECH` (deleguje mikrofon na Google App), ne raw `SpeechRecognizer` — appka proto nepotřebuje `RECORD_AUDIO` oprávnění.
+
+**POI kategorie (`SearchCategory.kt`)** — 5 kategorií (Benzín/Parkování/Restaurace/Obchody/Káva), `mapboxCategoryName` je Search Box API `sbsCanonicalName` ověřený proti SDK's vlastnímu `ui/view/category/Category.kt` (`gas_station`, `parking_lot`, `restaurant`, `shopping_mall`, `cafe`). `SearchEngine.search(categoryName, CategorySearchOptions(...), SearchCallback)` vrací rovnou `SearchResult`y, žádný suggest→select krok. **`boundingBox` (~3km, ne jen `proximity` bias) je nutný** — bez něj u řídké kategorie (např. benzínky na venkově) API dotáhne výsledky klidně 10+ km daleko, aby naplnilo `limit` (8, sladěno s `MapWidget.kt`'s `MAX_CATEGORY_PINS`), a kamera se pak musí tak oddálit, že většina pinů skončí schovaná pod kartou výsledků.
+
+**Očíslované piny na mapě** (styl referenční appky) — `MapWidget` kreslí piny přes `PointAnnotationManager`, ne `SearchOverlay` (ten žádnou mapu nemá). `SearchOverlay` hlásí aktuální výsledky kategorie přes `onCategoryResultsChanged`; `MapWidget` na to reaguje v `updateCategoryPins`: smaže staré piny, nakreslí nové (bitmapa na číslo, `category-pin-1`..`8`, zaregistrovaná jednou při `loadStyle`), zavolá `mapboxMap.cameraForCoordinates(...)` s `EdgeInsets` nahoře cca 300dp (aby se piny nezakryly kartou), a **schová vrstvu parkovišť** (`setStyleLayerProperty(PARKING_LAYER_ID, "visibility", "none")`) — jinak by se do výsledků kategorie vizuálně míchaly nesouvisející fialové "P" ikony. Obojí se vrátí zpět, jakmile `results` zprázdní (opuštění kategorie nebo zavření celého overlaye).
+
+**Gotcha — volná jízda přebíjí fit kamery na piny.** `LaunchedEffect(location)`'s `easeTo` (viz Kamera a puck níže) běží dál i při procházení kategorií a při každém GPS ticku (~500ms) přecentruje kameru zpátky na aktuální polohu — tím do ~1s zruší jednorázový `cameraForCoordinates` fit, takže mapa vypadá, že "skočila zpátky" a piny zmizí. Řeší nový flag `hasCategoryPins`, kterým je `easeTo` podmíněné stejně jako `!isNavigating`.
 
 **Tok: výběr cíle → trasa → navigace hned.** `requestRoutes()` → `onRoutesReady` → `setNavigationRoutes()` + `startTripSession()` (`isNavigating` se dotáhne samo z `TripSessionStateObserver`u, viz níže). **Žádný preview / mezikrok "Start"** — je to záměr, ne chybějící feature. Při rychlém přepsání cíle se rozjetý request nejdřív `cancelRouteRequest(id)`, a každý callback před zápisem porovná svoje `requestId` s `activeRequestId` — bez toho může opožděný výsledek staršího hledání přepsat novější trasu (nebo mu `onCanceled` odtrackovat id).
 
@@ -179,17 +198,13 @@ Turn-by-turn počítaný přímo v appce přes **Mapbox Navigation SDK + Search 
 
 **Gotcha — trasa zmizí po přepnutí panelu:** `MapWidget` (a s ním `MapView`, `routeLineApi`, `routeLineView`) se při návratu Navigace→Mapa tvoří znovu. `RoutesObserver` sice při re-registraci hned vystřelí s pořád běžícími routes, jenže to je **dřív, než dojede načtení stylu** (naměřeno: routes v T+0.465 s vs. styl v T+0.926 s), takže `mapboxMap.style` je ještě `null` a kresba se zahodí — a protože se sada tras už nikdy nezmění, trasa by na mapě chyběla po zbytek jízdy. Řeší to `routeLineApi.getRouteDrawData { routeLineView.renderRouteDrawData(style, it) }` volané v `loadStyle` callbacku **hned za** `routeLineView.initializeLayers(style)`. Vykreslí, co `routeLineApi` zrovna drží, takže je to správně v obou pořadích a bez trasy no-op.
 
-**Overlaye při navigaci:** maneuver banner (`MapboxManeuverView`, TopCenter, `end = MANEUVER_BANNER_END_PADDING` = 72dp aby text nelezl pod tlačítko Ukončit — to zabírá 18dp padding + 48dp minimální touch target Material3 `IconButton`u = 66dp od pravé hrany, zbývá 6dp vzduchu; obě čísla jsou pojmenované konstanty v `MapWidget.kt`, při změně tlačítka přepočítat) + trip progress (`MapboxTripProgressView`, BottomCenter, 64dp). Po dobu navigace se **skrývá `SpeedDisplay` i tlačítko "Navigovat"** — oba sedí ve stejném spodním pásu jako trip progress bar. Ve volné jízdě je layout beze změny.
+**Overlaye při navigaci:** maneuver banner (`MapboxManeuverView`, TopCenter, `end = MANEUVER_BANNER_END_PADDING` = 72dp aby text nelezl pod tlačítko Ukončit — to zabírá 18dp padding + 48dp minimální touch target Material3 `IconButton`u = 66dp od pravé hrany, zbývá 6dp vzduchu; obě čísla jsou pojmenované konstanty v `MapWidget.kt`, při změně tlačítka přepočítat) + trip progress (`MapboxTripProgressView`, BottomCenter, 64dp). `SpeedDisplay` a tlačítko "Navigovat", které dřív sdílely tenhle spodní pás, byly od té doby z appky úplně odstraněné (ne jen skryté po dobu navigace).
 
 **Tmavý styl obou hotových View:** SDK defaulty jsou světlé — `MapboxTripProgressView` má pozadí `@color/colorSurface` = **bílá** (i v Mapboxím `values-night`), tedy v noci svítící pruh přes celou spodní hranu mapy; maneuver banner je modrošedý `#37516F`. Řeší to `res/values/nav_colors.xml` (tokeny 1:1 z `CarColors.kt`) + `res/values/nav_styles.xml` (styly dědí z originálních `MapboxStyle*` a přebíjí jen barvy). XML je nutné, protože Mapbox API bere `@ColorRes`/`@StyleRes`, ne Compose `Color`. Aplikuje se v `factory` bloku: `MapboxTripProgressView.updateStyle(R.style.CarTripProgressView)`, `MapboxManeuverView.updateManeuverViewOptions(darkManeuverViewOptions())` — maneuver View **nemá** `updateStyle`, jediná runtime cesta jsou `ManeuverViewOptions`. `tripProgressViewBackgroundColor` **musí být reference na `@color/`**, ne barevný literál — View ho čte přes `getResourceId()` a posílá do `ContextCompat.getColor()`.
 
-## Module: SpeedDisplay (ui/speed/SpeedDisplay.kt)
-
-`SpeedDisplay(speedKmh: Float, speedLimitKmh: Int = 50, modifier)` — zobrazuje 0 pod 3f km/h, barvy: bílá <90, oranžová 90–120, červená >120. Roundel s limitem vpravo od "km/h" — dynamická hodnota z `SpeedLimitRepository`.
-
 ## Module: SpeedLimit (data/speedlimit/SpeedLimitRepository.kt)
 
-Nominatim reverse geocoding (`nominatim.openstreetmap.org`) — dotaz při přesunu >200m, vrací 50 (obec: city/town/village/suburb) nebo 90 (mimo). `User-Agent: CarLauncher/1.0` povinný. `LauncherViewModel` triggeruje `updateIfMoved(lat, lon)` při každé location změně. Sdílené přes Hilt singleton — `MapViewModel` a `LauncherViewModel` oba injectují a exposují `speedLimit: StateFlow<Int>`.
+Nominatim reverse geocoding (`nominatim.openstreetmap.org`) — dotaz při přesunu >200m, vrací 50 (obec: city/town/village/suburb) nebo 90 (mimo). `User-Agent: CarLauncher/1.0` povinný. `LauncherViewModel` triggeruje `updateIfMoved(lat, lon)` při každé location změně a jako jediný v appce exposuje `speedLimit: StateFlow<Int>` (Hilt singleton repository) — krmí `MapNavPanel` → `NavAreaWidget`'s vlastní speed display v notifikačním panelu Navigace. `MapViewModel` dřív taky injectoval/exposoval stejný `speedLimit` pro (od té doby odstraněný) `SpeedDisplay` v `MapWidget`u — ten binding je pryč, `SpeedLimitRepository` samotné zůstává beze změny.
 
 ## Module: WeatherCalendarWidget (ui/launcher/)
 
@@ -279,7 +294,6 @@ Manuální „dashcam“ — `IncidentFab` v `MainActivity`: přesouvatelné plo
 Finalizovaný design: `.claude/design/` (CarLauncher.html, app.jsx, widgets.jsx, icons.jsx). Implementovat přesně, neiterorat.
 
 Klíčové hodnoty:
-- SpeedDisplay číslo: 56sp bold, tabular-nums
 - DockBar výška: 88dp, slot touch target: 64dp, vizuální: 52dp, corner: 14dp
 - Všechny touch targets: min 48×48 dp
 
