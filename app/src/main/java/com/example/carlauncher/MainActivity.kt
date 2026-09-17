@@ -116,17 +116,24 @@ class MainActivity : ComponentActivity() {
                 val pagerState = rememberPagerState(pageCount = { 3 })
                 val incidentEnabled = BuildConfig.INCIDENT_RECORDER_ENABLED
                 var showIncidentRecorder by remember { mutableStateOf(false) }
+                // Disabled for the duration of any touch on the map panel (see MapNavPanel's
+                // trackTouchActive) — otherwise a left/right (or diagonal) pan on the map gets
+                // hijacked into a page swipe, since Pager has no way to negotiate gesture
+                // ownership with the native MapView's own gesture detector on its own.
+                var mapTouchActive by remember { mutableStateOf(false) }
 
                 Box(modifier = Modifier.fillMaxSize()) {
                     HorizontalPager(
                         state = pagerState,
                         modifier = Modifier.fillMaxSize(),
-                        beyondViewportPageCount = 1
+                        beyondViewportPageCount = 1,
+                        userScrollEnabled = !mapTouchActive,
                     ) { page ->
                         when (page) {
                             0 -> LauncherScreen(
                                 isDark = isDark,
-                                onLaunchSplitScreen = { pkg1, pkg2 -> launchSplitScreen(pkg1, pkg2) }
+                                onLaunchSplitScreen = { pkg1, pkg2 -> launchSplitScreen(pkg1, pkg2) },
+                                onMapTouchActiveChanged = { active -> mapTouchActive = active }
                             )
                             1 -> WidgetScreen(
                                 onLaunchSplitScreen = { pkg1, pkg2 -> launchSplitScreen(pkg1, pkg2) },

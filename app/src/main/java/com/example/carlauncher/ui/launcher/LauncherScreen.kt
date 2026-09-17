@@ -36,6 +36,7 @@ import com.example.carlauncher.ui.launcher.WeatherCalendarWidget
 fun LauncherScreen(
     isDark: Boolean = true,
     onLaunchSplitScreen: (pkg1: String, pkg2: String) -> Unit = { _, _ -> },
+    onMapTouchActiveChanged: (Boolean) -> Unit = {},
     viewModel: LauncherViewModel = hiltViewModel(),
     dockViewModel: DockViewModel = hiltViewModel()
 ) {
@@ -70,7 +71,8 @@ fun LauncherScreen(
                     speedLimitKmh = speedLimit,
                     modifier = Modifier
                         .weight(1.85f)
-                        .fillMaxHeight()
+                        .fillMaxHeight(),
+                    onTouchActiveChanged = onMapTouchActiveChanged,
                 )
 
                 // Right — ~35% width: music on top, quick destinations below

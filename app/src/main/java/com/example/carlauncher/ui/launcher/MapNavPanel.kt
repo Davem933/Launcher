@@ -58,6 +58,28 @@ private const val LONG_PRESS_TIMEOUT_MS = 1500L
 private val LONG_PRESS_SLOP = 12.dp
 
 /**
+ * Reports whether at least one pointer is currently down anywhere in this panel, without
+ * consuming events. Lets the caller disable HorizontalPager's own page-swipe for exactly the
+ * duration of a touch here, so panning the map in any direction — including toward whatever
+ * horizontal distance would otherwise cross the pager's page-swipe threshold — never gets
+ * hijacked into a page change. Mapbox's gesture detector lives inside the native MapView and has
+ * no way to negotiate gesture ownership with a pure-Compose ancestor like Pager on its own
+ * (that negotiation only happens between real Android ViewGroups via requestDisallowIntercept,
+ * which Pager isn't), so the pager must be told to stand down from the outside instead.
+ */
+private fun Modifier.trackTouchActive(onActiveChanged: (Boolean) -> Unit): Modifier =
+    this.pointerInput(Unit) {
+        awaitEachGesture {
+            awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            onActiveChanged(true)
+            do {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+            } while (event.changes.any { it.pressed })
+            onActiveChanged(false)
+        }
+    }
+
+/**
  * Fires [onLongPress] after a 1500ms hold with <12dp movement. Never consumes
  * the down event, so taps/drags (map pan-zoom, buttons underneath) still work.
  */
@@ -181,12 +203,17 @@ fun MapNavPanel(
     speedKmh: Float = 0f,
     speedLimitKmh: Int = 50,
     modifier: Modifier = Modifier,
+    onTouchActiveChanged: (Boolean) -> Unit = {},
 ) {
     var manualView by remember { mutableStateOf<PanelView?>(null) }
     var showPicker by remember { mutableStateOf(false) }
     val effectiveView = resolveEffectiveView(NavRepository.isActive, manualView)
 
-    Box(modifier = modifier.detectPanelLongPress(onLongPress = { showPicker = true })) {
+    Box(
+        modifier = modifier
+            .detectPanelLongPress(onLongPress = { showPicker = true })
+            .trackTouchActive(onActiveChanged = onTouchActiveChanged)
+    ) {
         when (effectiveView) {
             PanelView.MAP -> MapWidget(
                 modifier = Modifier.fillMaxSize(),
