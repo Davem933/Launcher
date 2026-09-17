@@ -24,8 +24,10 @@ import javax.inject.Inject
 
 private val DOCK_KEY = stringPreferencesKey("dock_slots_v2")
 
-// 6 configurable slots (Navigate is fixed 7th, not stored)
+// 8 configurable slots (Navigate is fixed 9th, not stored)
 // Split screen rule: packageName1 = nav (left), packageName2 = music (right)
+private const val SLOT_COUNT = 8
+
 private val DEFAULT_SLOTS = listOf(
     DockSlot.App("com.google.android.dialer"),
     DockSlot.App("com.google.android.apps.youtube.music"),
@@ -40,7 +42,9 @@ private val DEFAULT_SLOTS = listOf(
         packageName1 = "com.tomtom.speedcams.android.map",   // verified via PackageCheck logcat
         packageName2 = "com.google.android.apps.youtube.music",
         label        = "TomTom + Hudba"
-    )
+    ),
+    DockSlot.Empty,
+    DockSlot.Empty
 )
 
 @HiltViewModel
@@ -65,7 +69,12 @@ class DockViewModel @Inject constructor(
                 val slots: List<DockSlot> = if (raw.isNullOrEmpty()) {
                     DEFAULT_SLOTS
                 } else {
-                    withContext(Dispatchers.IO) { raw.split(",").take(6).map { decode(it) } }
+                    withContext(Dispatchers.IO) {
+                        val decoded = raw.split(",").take(SLOT_COUNT).map { decode(it) }
+                        // Older persisted state may have fewer than SLOT_COUNT entries
+                        // (e.g. from before an extra slot was added) — pad it out.
+                        decoded + List(SLOT_COUNT - decoded.size) { DockSlot.Empty }
+                    }
                 }
                 _slots.value = slots
             }
@@ -107,7 +116,7 @@ class DockViewModel @Inject constructor(
     fun updateSlot(index: Int, slot: DockSlot) {
         viewModelScope.launch {
             val current = _slots.value.toMutableList()
-            while (current.size < 6) current.add(DockSlot.Empty)
+            while (current.size < SLOT_COUNT) current.add(DockSlot.Empty)
             current[index] = slot
             val encoded = current.joinToString(",") { it.encode() }
             context.dockDataStore.edit { it[DOCK_KEY] = encoded }
