@@ -74,42 +74,44 @@ fun DockBar(
             .fillMaxWidth()
             .size(88.dp)
     ) {
+        // Menu sits pinned near the left edge, independent of the slot cluster below.
+        MenuTile(
+            onClick = { viewModel.openAppDrawer() },
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .padding(start = 20.dp)
+        )
+
+        // Configurable app slots — their own compact group, centered in the full dock width.
         Row(
             modifier = Modifier
-                .fillMaxWidth()
                 .align(Alignment.Center)
                 .padding(horizontal = 20.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Left cluster — fixed Menu icon, not configurable
-            MenuTile(onClick = { viewModel.openAppDrawer() })
-
-            // Right cluster — configurable app slots
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                slots.forEachIndexed { index, slot ->
-                    DockSlotTile(
-                        slot        = slot,
-                        editMode    = editMode,
-                        onClick     = {
-                            if (editMode) {
-                                pickerSlot = index
-                            } else {
-                                when (slot) {
-                                    is DockSlot.App         -> viewModel.launchApp(slot.packageName)
-                                    is DockSlot.SplitScreen -> onLaunchSplitScreen(
-                                        slot.packageName1, slot.packageName2)
-                                    DockSlot.Empty          -> { pickerSlot = index; editMode = true }
-                                    DockSlot.Navigate       -> viewModel.launchNavigation()
-                                }
-                            }
-                        },
-                        onLongClick = { editMode = true; pickerSlot = index }
-                    )
-                }
+            slots.forEachIndexed { index, slot ->
+                // The 2 split-screen slots (navigation + YouTube Music) are permanently
+                // fixed — no long-press edit, no picker, not affected by another slot's
+                // edit mode. Every other slot stays freely user-configurable as before.
+                val locked = slot is DockSlot.SplitScreen
+                DockSlotTile(
+                    slot        = slot,
+                    editMode    = editMode && !locked,
+                    onClick     = {
+                        when {
+                            slot is DockSlot.SplitScreen -> onLaunchSplitScreen(
+                                slot.packageName1, slot.packageName2)
+                            editMode                     -> pickerSlot = index
+                            slot is DockSlot.App         -> viewModel.launchApp(slot.packageName)
+                            slot == DockSlot.Empty       -> { pickerSlot = index; editMode = true }
+                            slot == DockSlot.Navigate    -> viewModel.launchNavigation()
+                        }
+                    },
+                    onLongClick = {
+                        if (!locked) { editMode = true; pickerSlot = index }
+                    }
+                )
             }
         }
     }
@@ -133,9 +135,9 @@ fun DockBar(
 // ── Fixed slot tiles ──────────────────────────────────────────────────────────
 
 @Composable
-private fun MenuTile(onClick: () -> Unit) {
+private fun MenuTile(onClick: () -> Unit, modifier: Modifier = Modifier) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .size(MenuSize)
             .shadow(6.dp, SlotShape, clip = false)
             .clip(SlotShape)
