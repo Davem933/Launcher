@@ -3,6 +3,7 @@ package com.example.carlauncher.ui.dock
 import android.content.Context
 import android.os.BatteryManager
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -64,28 +65,11 @@ fun DockStatusCluster(
         }
     }
 
-    Row(
+    Column(
         modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Icon(
-                imageVector = batteryIcon(batteryPct),
-                contentDescription = null,
-                tint = CarColors.Text2,
-                modifier = Modifier.size(18.dp),
-            )
-            Text(
-                text = "$batteryPct %",
-                color = CarColors.Text2,
-                fontSize = 14.sp,
-            )
-        }
-
         Text(
             text = now.format(timeFormatter),
             color = CarColors.Text,
@@ -95,19 +79,41 @@ fun DockStatusCluster(
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Icon(
-                imageVector = wmoIcon(weather?.code),
-                contentDescription = null,
-                tint = wmoIconColor(weather?.code),
-                modifier = Modifier.size(18.dp),
-            )
-            Text(
-                text = weather?.let { "${it.tempC}°" } ?: "...",
-                color = CarColors.Text2,
-                fontSize = 14.sp,
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Icon(
+                    imageVector = batteryIcon(batteryPct),
+                    contentDescription = null,
+                    tint = CarColors.Text2,
+                    modifier = Modifier.size(16.dp),
+                )
+                Text(
+                    text = "$batteryPct %",
+                    color = CarColors.Text2,
+                    fontSize = 13.sp,
+                )
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Icon(
+                    imageVector = wmoIcon(weather?.code),
+                    contentDescription = null,
+                    tint = wmoIconColor(weather?.code),
+                    modifier = Modifier.size(16.dp),
+                )
+                Text(
+                    text = weather?.let { "${it.tempC}°" } ?: "...",
+                    color = CarColors.Text2,
+                    fontSize = 13.sp,
+                )
+            }
         }
     }
 }
