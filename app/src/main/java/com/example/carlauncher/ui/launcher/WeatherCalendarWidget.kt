@@ -174,7 +174,7 @@ private fun EventRow(event: CalendarEvent) {
 
 // ── WMO helpers ───────────────────────────────────────────────────────────────
 
-private fun wmoIcon(code: Int?): ImageVector = when (code) {
+internal fun wmoIcon(code: Int?): ImageVector = when (code) {
     null         -> WbSunny
     0            -> Icons.Default.WbSunny
     1, 2, 3      -> Icons.Default.WbCloudy
@@ -187,7 +187,7 @@ private fun wmoIcon(code: Int?): ImageVector = when (code) {
     else         -> Icons.Default.WbCloudy
 }
 
-private fun wmoIconColor(code: Int?): Color = when (code) {
+internal fun wmoIconColor(code: Int?): Color = when (code) {
     null         -> Color(0xFFFACC15)
     0            -> Color(0xFFFACC15)  // žlutá — slunce
     1, 2, 3      -> Color(0xFF94A3B8)  // šedo-modrá — polojasno

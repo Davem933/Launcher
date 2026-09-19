@@ -82,6 +82,14 @@ fun DockBar(
                 .padding(start = 20.dp)
         )
 
+        // Battery / time / weather — pinned near the right edge, mirroring the Menu
+        // tile (Android Auto style status cluster).
+        DockStatusCluster(
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 20.dp)
+        )
+
         // Configurable app slots — their own compact group, centered in the full dock width.
         Row(
             modifier = Modifier
