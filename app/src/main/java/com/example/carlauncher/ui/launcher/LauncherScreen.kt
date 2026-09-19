@@ -24,7 +24,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.carlauncher.BuildConfig
-import com.example.carlauncher.debug.DebugPanel
 import com.example.carlauncher.debug.GpsDebugOverlay
 import com.example.carlauncher.ui.dock.DockBar
 import com.example.carlauncher.ui.dock.DockViewModel
@@ -117,7 +116,6 @@ fun LauncherScreen(
             isVisible = debugOverlayVisible,
             onToggle  = { debugOverlayVisible = !debugOverlayVisible }
         )
-        DebugPanel(viewModel = viewModel)
     }
 
     // ── AppDrawer overlay — fullscreen, shown when Menu tile is tapped ────────
