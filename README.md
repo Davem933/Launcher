@@ -1,27 +1,33 @@
 # CarLauncher
 
-> A personal Android car launcher for mounted in a car dashboard. Replaces the default Android home screen with a fullscreen, landscape-only interface built for driving — no distractions, no clutter.
+> A personal Android car launcher for a tablet mounted on the dashboard. It replaces the default Android home screen with a fullscreen, landscape-only interface built for driving: a 3D Mapbox map with built-in turn-by-turn navigation, music, weather, a trip log and a manual dashcam.
 
 ---
 
 ## What it looks like
 
-The interface is split into three fixed horizontal bands:
+The launcher has three pages you swipe between (dot indicator above the dock):
+
+| Page | Content |
+|------|---------|
+| **0 — Launcher** | Map / navigation panel + music, volume & brightness, weather & calendar |
+| **1 — Widgets** | Android AppWidget grid with swipeable widget stacks |
+| **2 — Trips** | Trip computer + driving log |
 
 ```
-+-----------------------------------------------------+
-|  StatusBar -- time . Czech date . battery . WiFi . GPS|
-+--------------------------------+--------------------+
-|                                |   MusicWidget       |
-|         MapWidget              |                     |
-|   (GPS marker + speed)         +--------------------+
-|                                | WeatherCalendar     |
-+--------------------------------+--------------------+
-|         DockBar -- 6 configurable app slots          |
-+-----------------------------------------------------+
++--------------------------------------+-------------------+
+|                                      |   MusicWidget     |
+|        MapNavPanel (~65 %)           |                   |
+|   Mapbox 3D map  <-long press->      +-------------------+
+|   navigation from Google Maps/Mapy   | Volume | Brightness|
+|                                      +-------------------+
+|                                      | Weather | Calendar |
++--------------------------------------+-------------------+
+| (Menu)      ( app slots . split-screen slots )  time/batt |
++----------------------------------------------------------+
 ```
 
-When navigation is active, **NavWidget** replaces the right column with turn-by-turn instructions.
+There is no status bar on purpose — the map gets the space. Time, battery and weather live in the bottom-right corner of the dock.
 
 ---
 
@@ -33,124 +39,125 @@ When navigation is active, **NavWidget** replaces the right column with turn-by-
 <img width="1920" height="1200" alt="image" src="https://github.com/user-attachments/assets/e9f8166f-3805-453d-ade5-3812f2afb1a0" />
 <img width="1030" height="642" alt="image" src="https://github.com/user-attachments/assets/360fdb70-0d9f-46e4-879a-91dc1e7fcadc" />
 
-
 ---
 
 ## Features
 
-### Map
-- MapLibre GL with **Mapy.cz** raster tiles
-- Smooth GPS marker with real-time bearing rotation
-- Auto-follow camera with 10 s timeout after manual pan
-- Nearby **POI overlay** -- fuel stations, parking, restaurants, hospitals
-- Speed display with color thresholds: white < 90 km/h . orange 90-120 . red > 120
+### Map (Mapbox Maps SDK)
+- Mapbox **Standard** style — 3D buildings and landmarks, night light preset, 45° pitch
+- Live **traffic** layer coloured by congestion
+- **Parking** pins from OpenStreetMap (Overpass API)
+- Vehicle puck fed by the app's own Kalman-filtered GPS
+- Auto-follow camera; a **locate-me** button recentres instantly and shows whether the camera is following
+- Tap a POI or parking pin → card with name, distance and a **Navigate** button
+- Online only — no offline fallback
 
-### GPS Pipeline
-```
-FusedLocationProviderClient (500 ms interval)
-  -> LocationProcessor
-      -> 2D Kalman filter (Q = 3 m/s) -- smooths GPS noise
-      -> Rolling average speed (last 3 samples)
-  -> VehicleDisplayLocation StateFlow
-  -> MapViewModel + LauncherViewModel
-```
+### Built-in navigation (Mapbox Navigation + Search SDK)
+- **Destination search** — full-panel search with live suggestions, recent searches and **voice input**
+- **POI categories** — fuel, parking, restaurants, shops, coffee — with numbered pins on the map
+- Picking a destination starts guidance immediately (no preview step)
+- Maneuver banner, trip progress (ETA / distance / time), route line and a follow camera
+- **Voice guidance** in the device language
+- Navigation ends automatically on arrival; it keeps running when you switch the panel
 
-### Navigation (NavWidget)
-- Parses **Google Maps** and **Waze** notifications in real time via `NotificationListenerService`
-- Center: **"za X m"** (distance to next maneuver) + street name below — hidden at 0 m
-- Bottom bar: current speed . route progress bar . ETA . End navigation button
-- Handles Google Maps non-breaking spaces in distance strings and content-based trip summary detection (ETA / time remaining / distance remaining)
-- Maneuver arrow icon from notification large icon
+### Navigation from other apps
+- Reads **Google Maps** and **Mapy.cz** turn-by-turn notifications via `NotificationListenerService`
+- Shows distance to the next maneuver, street, maneuver icon, ETA and an end button
+- Long press on the left panel (1.5 s) switches between Map and this Navigation view; active navigation always wins
+- Waze, TomTom and HERE WeGo only post placeholder notifications, so they aren't supported
 
-### Weather + Calendar (WeatherCalendarWidget)
-- **Weather**: [Open-Meteo](https://open-meteo.com) API — free, no key required; temperature, WMO condition, icon; refreshes every 30 min; coordinates from GPS with Prague fallback
-- **Calendar**: Android `CalendarContract` — today's events (max 3), colored dot from calendar color, time or "all day"
+### Trip computer & driving log
+- Trips are detected automatically (moving > 5 km/h for 10 s starts a trip, 30 s stationary ends it)
+- Stored in a Room database; live trip stats plus a history list
+- **CSV export** via the Android share sheet
 
-### Music Widget
-- Reads the active **MediaSession** via `MediaSessionManager`
-- Album art, track title, artist, real-time progress bar
-- Play / pause / skip controls
-- Requires notification access (`NotificationListenerService`) — the widget shows a grant-access button if permission is missing
+### Incident recorder (manual dashcam)
+- Draggable floating button opens a fullscreen camera overlay
+- Records video with CameraX (HD, no audio) to the app's external files folder
+- Logs GPS and detects **licence plates** (ML Kit text recognition, offline) during recording
+- Writes a JSON sidecar next to each `.mp4` with timestamps, GPS track and detected plates — the video itself is untouched
+- Can be switched off with the `INCIDENT_RECORDER_ENABLED` build flag
 
-### System Controls
-- **Volume** (blue) and **Brightness** (amber) cards
-- Colored fill rises from the bottom of the card based on current level
-- Swipe up to increase, swipe down to decrease — 1.5x sensitivity for comfortable in-car use
-- Brightness changes the window attribute directly (no `WRITE_SETTINGS` required)
+### Music
+- Reads the active **MediaSession** — album art, title, artist, progress, play / pause / skip
+- Needs notification access; shows a grant button if it's missing
 
-### Dock Bar
-- 6 configurable slots, persisted in **DataStore**
-- Each slot can be:
-  - a single app
-  - a **split-screen pair** (e.g. Waze + YouTube Music)
-  - empty
-- Long-press any slot to reassign it via the app picker
-- Split-screen is launched with `FLAG_ACTIVITY_LAUNCH_ADJACENT` after a 650 ms delay so Android has time to open the first app
+### Volume & brightness
+- Two cards with a coloured fill that rises with the level
+- Swipe up / down to change (1.5× sensitivity); brightness uses the window attribute, no `WRITE_SETTINGS`
 
-### Status Bar
-- Time in `HH:mm`, Czech date (`pondeli 26. cervna`)
-- Battery percentage + icon
-- WiFi indicator
-- GPS dot -- green = fix, red = no signal
+### Weather & calendar
+- **Weather**: [Open-Meteo](https://open-meteo.com) (free, no key), refreshed every 30 min, Prague fallback without GPS
+- **Calendar**: today's events from `CalendarContract` (max 3)
+
+### Dock
+- Floating circular dock: **Menu** (app drawer) pinned left, app slots in the middle, time / battery / weather pinned right
+- Slots can hold a single app or a **split-screen pair** (navigation left, music right); split-screen slots are locked
+- Long press a slot to reassign it; configuration is stored in DataStore
+
+### Widgets page
+- Hosts regular Android home-screen widgets in three layout templates
+- Each slot is a vertical stack you swipe through; long press for edit mode
 
 ---
 
-## Tech Stack
+## Tech stack
 
 | Layer | Technology |
 |-------|-----------|
-| Language | Kotlin |
-| UI | Jetpack Compose |
-| Dependency injection | Hilt |
-| Maps | MapLibre GL Android 11.5.x |
-| Tile source | Mapy.cz raster tiles |
+| Language / UI | Kotlin, Jetpack Compose |
+| DI | Hilt |
+| Map | Mapbox Maps SDK (Standard style) |
+| Navigation & search | Mapbox Navigation SDK, Mapbox Search Box SDK |
 | Location | FusedLocationProviderClient + 2D Kalman filter |
-| State management | StateFlow + ViewModel |
-| Persistence | DataStore Preferences |
-| Media | MediaSessionManager + NotificationListenerService |
-| Navigation | NotificationListenerService (Google Maps / Waze) |
-| Weather | Open-Meteo REST API (no key) |
+| Persistence | DataStore Preferences, Room (trips) |
+| Camera / ML | CameraX, ML Kit Text Recognition v2 (bundled) |
+| Media & 3rd-party nav | MediaSessionManager + NotificationListenerService |
+| Weather | Open-Meteo REST API |
+| Parking / speed limit | OpenStreetMap Overpass, Nominatim |
 | Calendar | Android CalendarContract |
-| POI data | OpenStreetMap Overpass API |
 
 ---
 
-## Target Device
+## Target device
 
 | Property | Value |
 |----------|-------|
 | Device | Lenovo Tab M10 Plus (3rd Gen) |
 | Chipset | MediaTek Helio G80 |
 | Android | 16 (API 36) |
-| Screen | ~1143 x 686 dp -- landscape locked, fullscreen |
+| Screen | ~1143 × 686 dp, landscape locked, fullscreen |
 | minSdk | 31 |
 | compileSdk / targetSdk | 36 |
 
-> **Emulator note:** use an API 34 (Android 14) x86_64 image with Google Play. API 35+ emulators may fail to load `libmaplibre.so` due to the 16 KB page-size constraint (the Helio G80 physical device is not affected).
+> **Emulator note:** use an API 34 (Android 14) x86_64 image with Google Play. API 35+ emulators enforce 16 KB page alignment for native libraries, which hasn't been verified for the Mapbox `.so` files. The Helio G80 device is not affected.
 
 ---
 
-## Build & Install
+## Build & install
 
 ### Prerequisites
-- Android Studio Hedgehog or later
-- ADB in PATH or via `$env:LOCALAPPDATA\Android\Sdk\platform-tools\`
-- A **Mapy.cz API key** (free tier works) -- [get one here](https://developer.mapy.cz/)
+- Android Studio (recent stable)
+- Two Mapbox tokens from https://account.mapbox.com/access-tokens/
 
-### Setup
+### Mapbox tokens
 
-```bash
-# Add your Mapy.cz API key to local.properties (gitignored)
-echo "MAPYCZ_API_KEY=your_key_here" >> local.properties
+```properties
+# local.properties — public token (pk.…)
+MAPBOX_ACCESS_TOKEN=pk.your_token
+
+# ~/.gradle/gradle.properties — secret token (sk.…) with DOWNLOADS:READ scope,
+# used only by Gradle to download the Mapbox SDK
+MAPBOX_DOWNLOADS_TOKEN=sk.your_token
 ```
 
 ### Gradle
 
 ```bash
 ./gradlew assembleDebug        # build APK
-./gradlew installDebug         # build + push to connected device
-./gradlew lint                 # lint
-./gradlew test                 # unit tests
+./gradlew installDebug         # build + install to connected device
+./gradlew lint
+./gradlew test
 ```
 
 ### Manual ADB install (PowerShell)
@@ -162,63 +169,44 @@ $adb = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
 
 ---
 
-## First-run Setup
+## First-run setup
 
-1. **Set as home launcher** -- Android will prompt on first launch, or go to *Settings > Apps > Default apps > Home app > CarLauncher*
-2. **Notification access** -- required for music widget and navigation: *Settings > Apps > Special app access > Notification access > CarLauncher > Enable*
-3. **Location permission** -- requested automatically on first launch; grant *Precise location*
-4. **Calendar permission** -- `READ_CALENDAR` requested on first launch; grant to enable the calendar widget
+1. **Set as home app** — *Settings › Apps › Default apps › Home app › CarLauncher*
+2. **Notification access** (music + navigation from other apps) — *Settings › Apps › Special app access › Notification access › CarLauncher*
+3. **Location** — grant *Precise location* when asked
+4. **Calendar** — grant `READ_CALENDAR` for the calendar widget
+5. **Camera** — asked the first time you open the incident recorder
 
 ---
 
 ## Architecture
 
-Single-module app (`app/`). Package layout:
+Single-module app (`app/`), package `com.example.carlauncher`:
 
 ```
 ui/
-  launcher/     LauncherScreen, LauncherViewModel, StatusBar
-                WeatherCalendarWidget, WeatherCalendarViewModel
-                SystemControlsWidget
-  map/          MapWidget, MapViewModel, MapStyleHelper, TileConfig
-  speed/        SpeedDisplay
-  music/        MusicWidget, MediaViewModel
-  navigation/   NavWidget
-  dock/         DockBar, DockViewModel, SlotPicker
-  theme/        CarLauncherTheme (dark only), CarColors
-
+  launcher/    LauncherScreen, MapNavPanel, WeatherCalendarWidget,
+               SystemControlsWidget, AppDrawer
+  map/         MapWidget, MapViewModel, SearchOverlay, DestinationSearchBar
+  navigation/  NavAreaWidget, NavWidget (notification-based navigation)
+  music/       MusicWidget
+  dock/        DockBar, SlotPicker
+  widgets/     WidgetScreen, TripScreen, LongPressWidgetHost
+  incident/    IncidentFab, IncidentRecorderScreen, IncidentOverlay
+  theme/       CarColors (dark only)
 data/
-  location/     LocationRepository, LocationProcessor, KalmanFilter
-  media/        MediaSessionObserver
-  navigation/   NavRepository
-  weather/      WeatherRepository
-  calendar/     CalendarRepository
-  dock/         DockDataStoreExt
-  map/          PmtilesHttpServer (offline tile server -- not active)
-  model/        VehicleDisplayLocation, TrackInfo, DockItem, DockSlot
-
-di/
-  LocationModule
-
-service/
-  MediaListenerService   (NotificationListenerService -- media + navigation)
-  LocationForegroundService  (stub)
+  location/    LocationRepository, LocationProcessor, KalmanFilter
+  navigation/  NavRepository, MapboxVoiceGuidanceObserver,
+               MapboxArrivalTeardownObserver
+  trip/        TripDetector, TripRepository, Room DB, CsvExporter
+  incident/    IncidentRecorder, IncidentLocationSource, PlateDetector
+  poi/         ParkingRepository
+  speedlimit/  weather/  calendar/  media/  dock/  widgets/  model/
+di/            Hilt modules
+service/       MediaListenerService (media + navigation notifications)
 ```
 
----
-
-## Changelog
-
-### v0.2.0
-- **NavWidget** -- real-time Google Maps / Waze navigation overlay; distance + street; route progress bar; ETA
-- **WeatherCalendarWidget** -- Open-Meteo weather + Android calendar events; replaces quick-dest placeholder
-- **System Controls** -- volume/brightness cards with fill-from-bottom visual; swipe up/down gesture
-
-### v0.1.0
-- Core launcher: map, speedometer, music widget, dock
-- Smooth GPS marker with Kalman filter + EMA bearing
-- POI overlay (Overpass API)
-- Smart Stacks widget page
+More detail for contributors is in [CLAUDE.md](CLAUDE.md).
 
 ---
 
@@ -226,13 +214,12 @@ service/
 
 | Feature | Status |
 |---------|--------|
-| Adaptive GPS interval (500 ms driving -> 5 s parked) | planned |
-| Speed limit roundel from OSM `maxspeed` | planned v0.3 |
-| Offline map (PMTiles v3 + NanoHTTPD) | code present, not wired |
-| LocationForegroundService | manifest stub only |
+| Adaptive GPS interval (500 ms driving → 5 s parked) | planned |
+| `LocationForegroundService` | manifest stub only |
+| Licence-plate detection on ONNX (YOLO + OCR) | on a feature branch, not merged |
 
 ---
 
 ## License
 
-Personal project -- not licensed for redistribution.
+Personal project — not licensed for redistribution.
