@@ -102,6 +102,11 @@ dependencies {
     implementation(libs.room.ktx)
     kapt(libs.room.compiler)
 
+    // WorkManager — offline fronta zpracování hlasových poznámek (Groq)
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.hilt.work)
+    kapt(libs.androidx.hilt.compiler)
+
     // CameraX — Incident Recorder video capture + frame analysis
     implementation(libs.androidx.camera.core)
     implementation(libs.androidx.camera.camera2)
