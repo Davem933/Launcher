@@ -14,6 +14,11 @@ coroutines = "1.8.1"
 room = "2.6.1"
 camerax = "1.4.2"
 mlkitText = "16.0.1"
+work = "2.9.1"
+hiltWork = "1.2.0"
+junit = "4.13.2"
+okhttp = "4.12.0"
+orgJson = "20240303"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -47,6 +52,15 @@ androidx-camera-lifecycle = { group = "androidx.camera", name = "camera-lifecycl
 androidx-camera-view      = { group = "androidx.camera", name = "camera-view",      version.ref = "camerax" }
 androidx-camera-video     = { group = "androidx.camera", name = "camera-video",     version.ref = "camerax" }
 mlkit-text-recognition    = { group = "com.google.mlkit", name = "text-recognition", version.ref = "mlkitText" }
+
+androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
+androidx-hilt-work        = { group = "androidx.hilt", name = "hilt-work", version.ref = "hiltWork" }
+androidx-hilt-compiler    = { group = "androidx.hilt", name = "hilt-compiler", version.ref = "hiltWork" }
+
+junit                = { group = "junit", name = "junit", version.ref = "junit" }
+coroutines-test      = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
+okhttp-mockwebserver = { group = "com.squareup.okhttp3", name = "mockwebserver", version.ref = "okhttp" }
+org-json             = { group = "org.json", name = "json", version.ref = "orgJson" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

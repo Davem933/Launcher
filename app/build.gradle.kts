@@ -56,6 +56,11 @@ android {
         compose = true
         buildConfig = true
     }
+
+    testOptions {
+        // android.util.Log apod. vrací v JVM testech default místo "Method not mocked"
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 dependencies {
@@ -112,4 +117,10 @@ dependencies {
     // Mapbox Search SDK — Fáze 3, vyhledávání cíle
     implementation("com.mapbox.search:mapbox-search-android:2.30.1")
     implementation("com.mapbox.search:mapbox-search-android-ui:2.30.1")
+
+    // Unit testy (JVM) — org.json přebíjí prázdné stuby z android.jar
+    testImplementation(libs.junit)
+    testImplementation(libs.coroutines.test)
+    testImplementation(libs.okhttp.mockwebserver)
+    testImplementation(libs.org.json)
 }
