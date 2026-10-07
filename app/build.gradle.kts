@@ -18,6 +18,10 @@ val mapboxAccessToken: String = localProps.getProperty("MAPBOX_ACCESS_TOKEN", "M
 // Incident Recorder feature toggle — disable locally with INCIDENT_RECORDER_ENABLED=false
 val incidentRecorderEnabled: String = localProps.getProperty("INCIDENT_RECORDER_ENABLED", "true")
 
+// Groq API klíč pro hlasové poznámky (free plán) — jen v local.properties, nikdy v gitu.
+// Prázdný → widget ukáže "Chybí Groq API klíč" a nenahrává.
+val groqApiKey: String = localProps.getProperty("GROQ_API_KEY", "")
+
 android {
     namespace = "com.example.carlauncher"
     compileSdk = 36
@@ -31,6 +35,7 @@ android {
 
         buildConfigField("String", "MAPBOX_ACCESS_TOKEN", "\"$mapboxAccessToken\"")
         buildConfigField("boolean", "INCIDENT_RECORDER_ENABLED", incidentRecorderEnabled)
+        buildConfigField("String", "GROQ_API_KEY", "\"$groqApiKey\"")
     }
 
     buildTypes {
