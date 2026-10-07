@@ -48,17 +48,17 @@ fun TripScreen(
                 .padding(horizontal = 12.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            TripComputerWidget(modifier = Modifier.weight(1f))
-            JizdniDenikWidget(
-                modifier = Modifier.weight(1f),
-                onOpenHistory = { showHistory = true }
-            )
             VoiceNotesWidget(
                 modifier = Modifier.weight(1f),
                 onOpenNotes = { id ->
                     notesInitialId = id
                     showNotes = true
                 },
+            )
+            TripComputerWidget(modifier = Modifier.weight(1f))
+            JizdniDenikWidget(
+                modifier = Modifier.weight(1f),
+                onOpenHistory = { showHistory = true }
             )
         }
 
