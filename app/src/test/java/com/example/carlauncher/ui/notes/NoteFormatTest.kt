@@ -24,6 +24,14 @@ class NoteFormatTest {
         assertEquals("2:00", formatDuration(120_000))
     }
 
+    @Test fun widgetNotes_skipCompletedAndKeepLimit() {
+        fun note(id: Long, completed: Boolean = false) =
+            VoiceNoteEntity(id = id, createdAt = 0, durationMs = 0, audioPath = null, completed = completed)
+        val notes = listOf(note(1), note(2, completed = true), note(3), note(4), note(5))
+
+        assertEquals(listOf(1L, 3L, 4L), widgetNotes(notes, limit = 3).map { it.id })
+    }
+
     @Test fun rowTitle_dependsOnStatus() {
         val base = VoiceNoteEntity(createdAt = 0, durationMs = 0, audioPath = null)
         assertEquals("⏳ Zpracovávám…", noteRowTitle(base.copy(status = NoteStatus.PENDING)))

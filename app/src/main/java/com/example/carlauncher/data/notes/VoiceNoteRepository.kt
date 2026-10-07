@@ -73,6 +73,8 @@ class VoiceNoteRepository @Inject constructor(
         dao.deleteById(id)
     }
 
+    suspend fun setCompleted(id: Long, completed: Boolean) = dao.setCompleted(id, completed)
+
     /** Smaže osiřelé nahrávky a znovu zařadí rozpracované poznámky (proces mohl být zabit). */
     fun cleanupOnStartup() {
         scope.launch {

@@ -26,6 +26,10 @@ fun formatDuration(ms: Long): String {
     return "%d:%02d".format(s / 60, s % 60)
 }
 
+/** Widget ukazuje jen nesplněné — splněné by zbytečně zabíraly omezená místa. */
+fun widgetNotes(notes: List<VoiceNoteEntity>, limit: Int): List<VoiceNoteEntity> =
+    notes.asSequence().filter { !it.completed }.take(limit).toList()
+
 fun noteRowTitle(note: VoiceNoteEntity): String = when (note.status) {
     NoteStatus.PENDING, NoteStatus.PROCESSING -> "⏳ Zpracovávám…"
     NoteStatus.FAILED -> "⚠ Chyba zpracování"

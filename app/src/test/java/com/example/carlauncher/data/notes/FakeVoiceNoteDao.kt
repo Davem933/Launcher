@@ -21,4 +21,7 @@ class FakeVoiceNoteDao : VoiceNoteDao {
         if (rows.containsKey(note.id)) { rows[note.id] = note; emit() }
     }
     override suspend fun deleteById(id: Long) { rows.remove(id); emit() }
+    override suspend fun setCompleted(id: Long, completed: Boolean) {
+        rows[id]?.let { rows[id] = it.copy(completed = completed); emit() }
+    }
 }

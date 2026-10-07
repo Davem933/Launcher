@@ -23,7 +23,13 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -38,10 +44,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationException
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -52,6 +62,8 @@ import com.example.carlauncher.data.notes.VoiceNoteEntity
 import com.example.carlauncher.ui.theme.CarColors
 
 private const val LONG_PRESS_MS = 1_500L
+private const val SWIPE_THRESHOLD_FRACTION = 0.4f
+private const val COMPLETED_ALPHA = 0.5f
 
 @Composable
 fun VoiceNotesScreen(
@@ -97,12 +109,18 @@ fun VoiceNotesScreen(
         } else {
             LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(notes, key = { it.id }) { note ->
-                    NoteCard(
+                    SwipeableNote(
                         note = note,
-                        now = now,
-                        onRetry = { viewModel.retry(note.id) },
-                        onLongPress = { pendingDelete = note },
-                    )
+                        onDelete = { viewModel.delete(note.id) },
+                        onToggleCompleted = { viewModel.toggleCompleted(note) },
+                    ) {
+                        NoteCard(
+                            note = note,
+                            now = now,
+                            onRetry = { viewModel.retry(note.id) },
+                            onLongPress = { pendingDelete = note },
+                        )
+                    }
                 }
             }
         }
@@ -127,6 +145,72 @@ fun VoiceNotesScreen(
         )
     }
 }
+
+/**
+ * Swipe doprava = smazat (hned, bez potvrzení), swipe doleva = splněno / vrátit.
+ * Splnění se dá jen u zpracované poznámky — u rozpracované by NoteProcessor příznak přepsal.
+ */
+@Composable
+private fun SwipeableNote(
+    note: VoiceNoteEntity,
+    onDelete: () -> Unit,
+    onToggleCompleted: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    val state = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            when (value) {
+                SwipeToDismissBoxValue.StartToEnd -> { onDelete(); true }
+                // false = karta se vrátí na místo, zůstává v seznamu jen přeškrtnutá
+                SwipeToDismissBoxValue.EndToStart -> { onToggleCompleted(); false }
+                SwipeToDismissBoxValue.Settled -> true
+            }
+        },
+        // Mazání je bez pojistky → vyžadovat delší tah, ne jen škrtnutí při scrollu
+        positionalThreshold = { totalDistance -> totalDistance * SWIPE_THRESHOLD_FRACTION },
+    )
+    SwipeToDismissBox(
+        state = state,
+        enableDismissFromEndToStart = note.status == NoteStatus.DONE,
+        backgroundContent = { SwipeBackground(state.dismissDirection, note.completed) },
+        content = { content() },
+    )
+}
+
+@Composable
+private fun SwipeBackground(direction: SwipeToDismissBoxValue, completed: Boolean) {
+    val (color, icon, alignment, label) = when (direction) {
+        SwipeToDismissBoxValue.StartToEnd ->
+            SwipeVisual(CarColors.Danger, Icons.Default.Delete, Alignment.CenterStart, "Smazat")
+        SwipeToDismissBoxValue.EndToStart -> if (completed) {
+            SwipeVisual(CarColors.Surface3, Icons.AutoMirrored.Filled.Undo, Alignment.CenterEnd, "Vrátit")
+        } else {
+            SwipeVisual(CarColors.Go, Icons.Default.Check, Alignment.CenterEnd, "Splněno")
+        }
+        SwipeToDismissBoxValue.Settled -> return
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clip(RoundedCornerShape(12.dp))
+            .background(color)
+            .padding(horizontal = 24.dp),
+        contentAlignment = alignment,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, contentDescription = null, tint = Color.White)
+            Spacer(Modifier.width(8.dp))
+            Text(label, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+private data class SwipeVisual(
+    val color: Color,
+    val icon: ImageVector,
+    val alignment: Alignment,
+    val label: String,
+)
 
 @Composable
 private fun CategoryChips(selected: NoteCategory?, onSelect: (NoteCategory?) -> Unit) {
@@ -166,6 +250,7 @@ private fun NoteCard(
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(CarColors.Surface)
+            .alpha(if (note.completed) COMPLETED_ALPHA else 1f)
             .pointerInput(note.id) {
                 // Stejný vzor jako DockBar: Compose withTimeout hází
                 // PointerEventTimeoutCancellationException, ne kotlinx TimeoutCancellationException.
@@ -182,7 +267,13 @@ private fun NoteCard(
     ) {
         Box(Modifier.width(5.dp).heightIn(min = 72.dp).background(accent))
         Column(Modifier.padding(12.dp).weight(1f)) {
-            Text(noteRowTitle(note), color = CarColors.Text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                noteRowTitle(note),
+                color = CarColors.Text,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                textDecoration = if (note.completed) TextDecoration.LineThrough else null,
+            )
             note.text?.let {
                 Spacer(Modifier.height(4.dp))
                 Text(it, color = CarColors.Text2, fontSize = 13.sp)

@@ -19,4 +19,6 @@ data class VoiceNoteEntity(
     val category: NoteCategory? = null,
     val errorMessage: String? = null,
     val attempts: Int = 0,
+    /** Uživatel ji v seznamu označil jako splněnou (swipe doleva); ve widgetu se neukazuje. */
+    val completed: Boolean = false,
 )

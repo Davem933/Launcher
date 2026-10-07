@@ -22,6 +22,7 @@ object VoiceNotesModule {
     @Singleton
     fun providesVoiceNotesDatabase(@ApplicationContext context: Context): VoiceNotesDatabase =
         Room.databaseBuilder(context, VoiceNotesDatabase::class.java, "voice_notes_database")
+            .addMigrations(VoiceNotesDatabase.MIGRATION_1_2)
             .fallbackToDestructiveMigration()
             .build()
 

@@ -71,6 +71,10 @@ class VoiceNotesViewModel @Inject constructor(
 
     fun delete(id: Long) { viewModelScope.launch { repository.delete(id) } }
 
+    fun toggleCompleted(note: VoiceNoteEntity) {
+        viewModelScope.launch { repository.setCompleted(note.id, !note.completed) }
+    }
+
     private companion object {
         const val JUST_SAVED_MS = 1_500L
     }

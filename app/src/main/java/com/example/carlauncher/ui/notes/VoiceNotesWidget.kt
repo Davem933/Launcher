@@ -145,10 +145,11 @@ fun VoiceNotesWidget(
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = CarColors.BorderSoft)
 
-        if (notes.isEmpty()) {
+        val recent = widgetNotes(notes, RECENT_NOTES)
+        if (recent.isEmpty()) {
             Text("Zatím žádné poznámky", color = CarColors.Text3, fontSize = 11.sp)
         } else {
-            notes.take(RECENT_NOTES).forEach { note ->
+            recent.forEach { note ->
                 RecentNoteRow(note = note, now = now, onClick = { onOpenNotes(note.id) })
             }
         }

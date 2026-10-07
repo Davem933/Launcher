@@ -25,4 +25,8 @@ interface VoiceNoteDao {
 
     @Query("DELETE FROM voice_notes WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    /** Cílený UPDATE jednoho sloupce — nepřepíše řádek, který zrovna zapisuje NoteProcessor. */
+    @Query("UPDATE voice_notes SET completed = :completed WHERE id = :id")
+    suspend fun setCompleted(id: Long, completed: Boolean)
 }
