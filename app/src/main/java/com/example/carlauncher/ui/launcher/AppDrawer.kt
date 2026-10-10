@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -38,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -54,6 +56,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun AppDrawer(
     onAppClick: (packageName: String) -> Unit,
+    onOpenSettings: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -162,6 +165,10 @@ fun AppDrawer(
                         .fillMaxWidth()
                         .weight(1f)
                 ) {
+                    // Outside `filtered` on purpose — search never hides the settings tile
+                    item(key = "launcher_settings") {
+                        SettingsTile(onClick = onOpenSettings)
+                    }
                     items(filtered, key = { it.packageName }) { app ->
                         DrawerAppItem(
                             app = app,
@@ -209,6 +216,40 @@ private fun DrawerAppItem(app: DockItem, onClick: () -> Unit) {
         Spacer(Modifier.height(4.dp))
         Text(
             text = app.displayName,
+            style = TextStyle(fontSize = 11.sp, color = CarColors.Text2),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun SettingsTile(onClick: () -> Unit) {
+    val shape = RoundedCornerShape(14.dp)
+    Column(
+        modifier = Modifier
+            .clip(shape)
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .size(52.dp)
+                .background(CarColors.Accent, shape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Default.Settings,
+                contentDescription = "Nastavení launcheru",
+                tint = Color.White,
+                modifier = Modifier.size(28.dp)
+            )
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = "Nastavení",
             style = TextStyle(fontSize = 11.sp, color = CarColors.Text2),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
