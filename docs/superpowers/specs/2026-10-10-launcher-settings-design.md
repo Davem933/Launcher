@@ -41,7 +41,7 @@ Přístup: **fullscreen Compose overlay** (stejný vzor jako `AppDrawer` a `Inci
 
 ### Sekce „Oprávnění“
 
-Každý řádek: ikona, název, jednořádkový popis „k čemu to je“, stavový indikátor (✅ `CarColors.Go` = povoleno / ⚠️ jantarová `#FFC107` = chybí). Celý řádek je klikací, min. výška 48dp, klik spustí `settingsIntent` (vždy, i když je povoleno — umožní oprávnění i odebrat).
+Každý řádek: ikona, název, jednořádkový popis „k čemu to je“, stavový indikátor (✅ `CarColors.Go` = povoleno / ⚠️ `CarColors.Warn` = chybí). Celý řádek je klikací, min. výška 48dp, klik spustí `settingsIntent` (vždy, i když je povoleno — umožní oprávnění i odebrat).
 
 | Položka | Popis | Kontrola stavu | Klik otevře |
 |---|---|---|---|
