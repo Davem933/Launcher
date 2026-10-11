@@ -36,9 +36,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -90,6 +92,9 @@ private const val CATEGORY_RESULT_LIMIT = 8
 // hidden behind this card's floating list.
 private const val CATEGORY_SEARCH_RADIUS_DEG = 0.03
 
+/** Lifecycle of one category request — drives the loading / empty / error rows on the category screen. */
+private enum class CategoryStatus { LOADING, LOADED, FAILED }
+
 /**
  * Full-panel search takeover (fills the whole map panel, matching the reference app's
  * celoobrazovkové vyhledávání), replacing the compact [DestinationSearchBar] button while open.
@@ -132,6 +137,7 @@ fun SearchOverlay(
     var suggestions by remember { mutableStateOf<List<SearchSuggestion>>(emptyList()) }
     var activeCategory by remember { mutableStateOf<SearchCategory?>(null) }
     var categoryResults by remember { mutableStateOf<List<SearchResult>>(emptyList()) }
+    var categoryStatus by remember { mutableStateOf(CategoryStatus.LOADING) }
     var recentSearches by remember { mutableStateOf<List<HistoryRecord>>(emptyList()) }
 
     val latestLocation by rememberUpdatedState(currentLocation)
@@ -260,6 +266,7 @@ fun SearchOverlay(
     fun runCategorySearch(category: SearchCategory) {
         activeCategory = category
         categoryResults = emptyList()
+        categoryStatus = CategoryStatus.LOADING
         val here = latestLocation
         searchEngine.search(
             categoryName = category.mapboxCategoryName,
@@ -281,14 +288,20 @@ fun SearchOverlay(
                 limit = CATEGORY_RESULT_LIMIT,
             ),
             callback = object : SearchCallback {
+                // A late answer for a category the user already left (back, or switched to another
+                // chip) must not overwrite the screen they are looking at now.
                 override fun onResults(results: List<SearchResult>, responseInfo: ResponseInfo) {
+                    if (activeCategory != category) return
                     categoryResults = results
+                    categoryStatus = CategoryStatus.LOADED
                     onCategoryResultsChanged(results)
                 }
 
                 override fun onError(e: Exception) {
                     Log.e(TAG, "Category search failed for ${category.mapboxCategoryName}", e)
+                    if (activeCategory != category) return
                     categoryResults = emptyList()
+                    categoryStatus = CategoryStatus.FAILED
                     onCategoryResultsChanged(emptyList())
                 }
             },
@@ -360,10 +373,16 @@ fun SearchOverlay(
                             number = index + 1,
                             title = result.name,
                             subtitle = result.descriptionText ?: result.fullAddress,
+                            distance = distanceToResult(result, latestLocation)?.let(::formatPoiDistance),
                             onClick = { selectResult(result) },
                         )
                     }
                 }
+                CategoryStatusRow(
+                    status = categoryStatus,
+                    isEmpty = categoryResults.isEmpty(),
+                    onRetry = { runCategorySearch(category) },
+                )
             }
         } else {
             Column(
@@ -510,6 +529,44 @@ fun SearchOverlay(
     }
 }
 
+/**
+ * Feedback under the category result list: without it a failed or empty request left the card
+ * blank, indistinguishable from "still loading" (a revoked Mapbox token looked like a dead button).
+ */
+@Composable
+private fun CategoryStatusRow(status: CategoryStatus, isEmpty: Boolean, onRetry: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        when {
+            status == CategoryStatus.LOADING -> {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    color = CarColors.Accent,
+                    strokeWidth = 2.dp,
+                )
+                Spacer(Modifier.width(12.dp))
+                Text("Hledám…", color = CarColors.Text2, fontSize = 16.sp)
+            }
+            status == CategoryStatus.FAILED -> {
+                Text(
+                    text = "Hledání se nezdařilo. Zkontroluj připojení.",
+                    color = CarColors.Text2,
+                    fontSize = 16.sp,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = onRetry, modifier = Modifier.heightIn(min = 48.dp)) {
+                    Text("Zkusit znovu", color = CarColors.Accent, fontSize = 16.sp)
+                }
+            }
+            isEmpty -> Text("V okolí nic nenalezeno.", color = CarColors.Text2, fontSize = 16.sp)
+        }
+    }
+}
+
 @Composable
 private fun CategoryChip(
     category: SearchCategory,
@@ -543,6 +600,7 @@ private fun NumberedResultRow(
     number: Int,
     title: String,
     subtitle: String?,
+    distance: String?,
     onClick: () -> Unit,
 ) {
     Row(
@@ -562,13 +620,31 @@ private fun NumberedResultRow(
             Text(text = number.toString(), color = CarColors.Bg, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.width(14.dp))
-        Column {
+        Column(modifier = Modifier.weight(1f)) {
             Text(text = title, color = CarColors.Text, fontSize = 15.sp)
             if (subtitle != null) {
                 Text(text = subtitle, color = CarColors.Text3, fontSize = 12.sp)
             }
         }
+        if (distance != null) {
+            Spacer(Modifier.width(12.dp))
+            Text(text = distance, color = CarColors.Text2, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+        }
     }
+}
+
+/**
+ * Straight-line distance from the car, in meters. Prefers the API's own `distanceMeters` (computed
+ * from the request's `proximity`); falls back to the current GPS fix when the API omits it.
+ */
+private fun distanceToResult(result: SearchResult, here: VehicleDisplayLocation?): Float? {
+    result.distanceMeters?.let { return it.toFloat() }
+    if (here == null) return null
+    val out = FloatArray(1)
+    android.location.Location.distanceBetween(
+        here.lat, here.lng, result.coordinate.latitude(), result.coordinate.longitude(), out
+    )
+    return out[0]
 }
 
 @Composable

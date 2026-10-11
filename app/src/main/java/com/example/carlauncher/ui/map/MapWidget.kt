@@ -1093,7 +1093,7 @@ fun MapWidget(
 
 // Matches the maneuver banner / trip progress view's own metric formatting convention (this app
 // has no imperial-units path — applyLanguageAndVoiceUnitOptions derives units from device locale).
-private fun formatPoiDistance(meters: Float): String =
+internal fun formatPoiDistance(meters: Float): String =
     if (meters < 1000f) "${meters.roundToInt()} m" else "%.1f km".format(meters / 1000f)
 
 /**
