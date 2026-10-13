@@ -6,6 +6,7 @@ import android.graphics.Paint
 import android.util.Log
 import com.example.carlauncher.R
 import com.example.carlauncher.data.model.Parking
+import com.example.carlauncher.data.model.VehicleDisplayLocation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -46,6 +47,7 @@ import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -147,6 +149,9 @@ private const val PARKING_LAYER_ID = "parking-layer"
 // SearchOverlay.kt's own CATEGORY_RESULT_LIMIT — one style image per possible list position, so
 // every result gets a matching numbered pin on the map.
 private const val MAX_CATEGORY_PINS = 8
+// Below this speed the raw GPS bearing is noise (and drops to 0 = north when stationary), so the
+// heading-up camera and the puck arrow keep the last heading instead of spinning at every stop.
+private const val MIN_HEADING_SPEED_KMH = 5f
 private const val CATEGORY_PIN_IMAGE_PREFIX = "category-pin-"
 
 // Final review I-1 / re-review M-2: end padding that keeps the maneuver banner's right-hand
@@ -179,7 +184,14 @@ private class MapState {
     // cancelled alongside every other MapWidget-scoped API in the lifecycle DisposableEffect.
     var poiInteraction: Cancelable? = null
     var parkingInteraction: Cancelable? = null
+    // Last trustworthy direction of travel (see MIN_HEADING_SPEED_KMH); null until the first
+    // fix above that speed, in which case the camera simply keeps its current bearing.
+    var headingDeg: Double? = null
 }
+
+/** Free-drive heading: the GPS bearing while actually moving, otherwise the previous heading. */
+private fun nextHeading(previous: Double?, loc: VehicleDisplayLocation): Double? =
+    if (loc.speedKmh >= MIN_HEADING_SPEED_KMH) loc.bearingDeg.toDouble() else previous
 
 // A tapped POI (from the Standard style's built-in "poi" featureset) or one of our own parking
 // pins — backs the autozen-style popup with a name, distance and Navigate/Zrušit.
@@ -212,6 +224,9 @@ fun MapWidget(
     viewModel: MapViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
+    // Škálovaná (UI) density – EdgeInsets jsou v pixelech a kryjí Compose prvky, které se škálují
+    // přes DeviceScaleProvider; resources.displayMetrics.density by škálování obešlo.
+    val uiDensity = LocalDensity.current.density
     // Use the Activity lifecycle directly — HorizontalPager gives each page its own
     // LocalLifecycleOwner that may not advance to RESUMED while the page is offscreen,
     // which would leave MapView stuck and rendering a black surface.
@@ -370,11 +385,10 @@ fun MapWidget(
             }
             // EdgeInsets are pixels, not dp (same convention as followingPadding above) — top is
             // generous to clear SearchOverlay's category-results header + list card.
-            val density = context.resources.displayMetrics.density
             map.cameraForCoordinates(
                 results.map { it.coordinate },
                 CameraOptions.Builder().build(),
-                EdgeInsets(300.0 * density, 48.0 * density, 96.0 * density, 48.0 * density),
+                EdgeInsets(300.0 * uiDensity, 48.0 * uiDensity, 96.0 * uiDensity, 48.0 * uiDensity),
                 null,
                 null,
             ) { camera -> map.setCamera(camera) }
@@ -632,12 +646,11 @@ fun MapWidget(
                     camera.addCameraAnimationsLifecycleListener(
                         NavigationBasicGesturesHandler(navigationCamera)
                     )
-                    val density = context.resources.displayMetrics.density
                     viewportDataSource.followingPadding = EdgeInsets(
-                        140.0 * density,
-                        24.0 * density,
-                        110.0 * density,
-                        24.0 * density,
+                        140.0 * uiDensity,
+                        24.0 * uiDensity,
+                        110.0 * uiDensity,
+                        24.0 * uiDensity,
                     )
                     // Style fetch is online-only (no offline fallback in this phase) — log failures
                     // so a no-signal black map is diagnosable instead of silently inert.
@@ -975,6 +988,7 @@ fun MapWidget(
                     mapState.mapboxMap?.easeTo(
                         CameraOptions.Builder()
                             .center(Point.fromLngLat(snapLng, snapLat))
+                            .bearing(mapState.headingDeg)
                             .build(),
                         MapAnimationOptions.mapAnimationOptions { duration(500) }
                     )
@@ -1004,7 +1018,9 @@ fun MapWidget(
             loc.lat, loc.lng, viewModel.routePolyline.value
         )
 
-        locationProvider.push(Point.fromLngLat(snapLng, snapLat), loc.bearingDeg.toDouble())
+        val heading = nextHeading(mapState.headingDeg, loc)
+        mapState.headingDeg = heading
+        locationProvider.push(Point.fromLngLat(snapLng, snapLat), heading ?: loc.bearingDeg.toDouble())
 
         // Task 4: gated on !isNavigating — while active guidance is running, the Navigation
         // SDK's own NavigationCamera (fed by viewportDataSource in the locationObserver/
@@ -1013,10 +1029,14 @@ fun MapWidget(
         // Also gated on !hasCategoryPins for the same reason — a category browse's one-time
         // cameraForCoordinates fit would otherwise be undone within ~500ms by this effect
         // recentering back onto the current location at the next GPS tick.
+        //
+        // Heading-up, not north-up: without a bearing the map stayed north-up, so driving south
+        // made the puck travel down the screen towards the driver instead of up the road ahead.
         if (isFollowing && !isNavigating && !hasCategoryPins) {
             mapState.mapboxMap?.easeTo(
                 CameraOptions.Builder()
                     .center(Point.fromLngLat(snapLng, snapLat))
+                    .bearing(heading)
                     .build(),
                 MapAnimationOptions.mapAnimationOptions { duration(500) }
             )
@@ -1093,7 +1113,7 @@ fun MapWidget(
 
 // Matches the maneuver banner / trip progress view's own metric formatting convention (this app
 // has no imperial-units path — applyLanguageAndVoiceUnitOptions derives units from device locale).
-private fun formatPoiDistance(meters: Float): String =
+internal fun formatPoiDistance(meters: Float): String =
     if (meters < 1000f) "${meters.roundToInt()} m" else "%.1f km".format(meters / 1000f)
 
 /**

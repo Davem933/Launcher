@@ -45,7 +45,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -439,7 +438,6 @@ private fun WidgetPage(
     onLongPress: () -> Unit
 ) {
     val context = LocalContext.current
-    val density = LocalDensity.current
     var cardSize by remember { mutableStateOf(IntSize.Zero) }
 
     val hostView = remember(widgetId) {
@@ -459,8 +457,10 @@ private fun WidgetPage(
         factory = { hostView },
         update = {
             if (cardSize != IntSize.Zero) {
-                val wDp = with(density) { cardSize.width.toDp().value.toInt() }
-                val hDp = with(density) { cardSize.height.toDp().value.toInt() }
+                // AppWidgety se renderují v reálných dp, ne v přeškálovaných (DeviceScaleProvider)
+                val realDensity = context.resources.displayMetrics.density
+                val wDp = (cardSize.width / realDensity).toInt()
+                val hDp = (cardSize.height / realDensity).toInt()
                 viewModel.appWidgetManager.updateAppWidgetOptions(widgetId, Bundle().apply {
                     putInt("appWidgetMinWidth", wDp)
                     putInt("appWidgetMaxWidth", wDp)
