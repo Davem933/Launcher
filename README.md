@@ -33,6 +33,7 @@ There is no status bar on purpose — the map gets the space. Time, battery and 
 
 ## Screenshots
 <img width="1514" height="968" alt="image" src="https://github.com/user-attachments/assets/5dd61417-d90e-4e42-9362-318e7db63dfe" />
+<img width="1511" height="946" alt="image" src="https://github.com/user-attachments/assets/9e8d2e95-3431-4c78-a8df-c8b2ff7826d6" />
 <img width="1920" height="1200" alt="Screenshot_20260629-165512" src="https://github.com/user-attachments/assets/438e8ab0-43a7-4c18-b504-28c25f9463af" />
 <img width="1920" height="1200" alt="Screenshot_20260629-165619" src="https://github.com/user-attachments/assets/92b05616-a44a-42f6-bc77-83a89db958bc" />
 <img width="1920" height="1200" alt="image" src="https://github.com/user-attachments/assets/7ca096b1-ff9b-41fa-87c0-ffe5f3e0c6e8" />
