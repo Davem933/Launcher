@@ -78,6 +78,8 @@ service/
 
 **Fullscreen:** `MainActivity` skryje status + nav bary přes `WindowInsetsControllerCompat`, nastaví `FLAG_KEEP_SCREEN_ON`. Nevolat `enableEdgeToEdge()` — konflikt. `screenOrientation="landscape"` a `windowSoftInputMode="adjustNothing"` jsou záměrné.
 
+**Škálování pro tablety:** `ui/theme/DeviceScale.kt` — `DeviceScaleProvider` v `MainActivity` přepíše `LocalDensity` faktorem `computeScale(screenWidthDp, screenHeightDp)` vůči referenci M10 (1143×686 dp), ořezaným na 0,85–1,6, s pásmem ±3 % → přesně 1,0. Všechny `.dp`/`.sp` se tak přeškálují najednou. `fontScale` se nemění (jinak dvojí škálování písma). **Pozor při úpravách:** `resources.displayMetrics.density` škálování obchází — pro pixelové hodnoty kryjící Compose prvky (Mapbox `EdgeInsets`) použít `LocalDensity.current.density`; pro AppWidget options (`WidgetScreen`) naopak reálnou density, protože AppWidgety se renderují v reálných dp. Mapboxí View komponenty (maneuver banner, trip progress, logo, puck) se neškálují.
+
 ## Dual-screen layout (HorizontalPager)
 
 `MainActivity` má `HorizontalPager` se třemi stranami (dot indikátor nad DockBar):
