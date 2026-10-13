@@ -44,6 +44,7 @@ import com.example.carlauncher.ui.incident.IncidentFab
 import com.example.carlauncher.ui.incident.IncidentRecorderScreen
 import com.example.carlauncher.ui.launcher.LauncherScreen
 import com.example.carlauncher.ui.theme.CarLauncherTheme
+import com.example.carlauncher.ui.theme.DeviceScaleProvider
 import com.example.carlauncher.ui.widgets.TripScreen
 import com.example.carlauncher.ui.widgets.WidgetScreen
 import com.example.carlauncher.ui.widgets.WidgetViewModel
@@ -113,64 +114,66 @@ class MainActivity : ComponentActivity() {
             val isDark = if (themeVm.hasSensor) isDarkSensor else isSystemInDarkTheme()
 
             CarLauncherTheme(isDark = isDark) {
-                val pagerState = rememberPagerState(pageCount = { 3 })
-                val incidentEnabled = BuildConfig.INCIDENT_RECORDER_ENABLED
-                var showIncidentRecorder by remember { mutableStateOf(false) }
-                // Disabled for the duration of any touch on the map panel (see MapNavPanel's
-                // trackTouchActive) — otherwise a left/right (or diagonal) pan on the map gets
-                // hijacked into a page swipe, since Pager has no way to negotiate gesture
-                // ownership with the native MapView's own gesture detector on its own.
-                var mapTouchActive by remember { mutableStateOf(false) }
+                DeviceScaleProvider {
+                    val pagerState = rememberPagerState(pageCount = { 3 })
+                    val incidentEnabled = BuildConfig.INCIDENT_RECORDER_ENABLED
+                    var showIncidentRecorder by remember { mutableStateOf(false) }
+                    // Disabled for the duration of any touch on the map panel (see MapNavPanel's
+                    // trackTouchActive) — otherwise a left/right (or diagonal) pan on the map gets
+                    // hijacked into a page swipe, since Pager has no way to negotiate gesture
+                    // ownership with the native MapView's own gesture detector on its own.
+                    var mapTouchActive by remember { mutableStateOf(false) }
 
-                Box(modifier = Modifier.fillMaxSize()) {
-                    HorizontalPager(
-                        state = pagerState,
-                        modifier = Modifier.fillMaxSize(),
-                        beyondViewportPageCount = 1,
-                        userScrollEnabled = !mapTouchActive,
-                    ) { page ->
-                        when (page) {
-                            0 -> LauncherScreen(
-                                isDark = isDark,
-                                onLaunchSplitScreen = { pkg1, pkg2 -> launchSplitScreen(pkg1, pkg2) },
-                                onMapTouchActiveChanged = { active -> mapTouchActive = active }
-                            )
-                            1 -> WidgetScreen(
-                                onLaunchSplitScreen = { pkg1, pkg2 -> launchSplitScreen(pkg1, pkg2) },
-                                onAddWidget = { slotIndex -> launchWidgetPicker(slotIndex) }
-                            )
-                            2 -> TripScreen(
-                                onLaunchSplitScreen = { pkg1, pkg2 -> launchSplitScreen(pkg1, pkg2) }
-                            )
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        HorizontalPager(
+                            state = pagerState,
+                            modifier = Modifier.fillMaxSize(),
+                            beyondViewportPageCount = 1,
+                            userScrollEnabled = !mapTouchActive,
+                        ) { page ->
+                            when (page) {
+                                0 -> LauncherScreen(
+                                    isDark = isDark,
+                                    onLaunchSplitScreen = { pkg1, pkg2 -> launchSplitScreen(pkg1, pkg2) },
+                                    onMapTouchActiveChanged = { active -> mapTouchActive = active }
+                                )
+                                1 -> WidgetScreen(
+                                    onLaunchSplitScreen = { pkg1, pkg2 -> launchSplitScreen(pkg1, pkg2) },
+                                    onAddWidget = { slotIndex -> launchWidgetPicker(slotIndex) }
+                                )
+                                2 -> TripScreen(
+                                    onLaunchSplitScreen = { pkg1, pkg2 -> launchSplitScreen(pkg1, pkg2) }
+                                )
+                            }
                         }
-                    }
 
-                    Row(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = 100.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        repeat(3) { i ->
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (pagerState.currentPage == i) Color.White
-                                        else Color.White.copy(alpha = 0.35f)
-                                    )
-                            )
+                        Row(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 100.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            repeat(3) { i ->
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            if (pagerState.currentPage == i) Color.White
+                                            else Color.White.copy(alpha = 0.35f)
+                                        )
+                                )
+                            }
                         }
-                    }
 
-                    // Incident Recorder — draggable floating entry point (feature-flagged)
-                    if (incidentEnabled && !showIncidentRecorder) {
-                        IncidentFab(onOpen = { showIncidentRecorder = true })
-                    }
+                        // Incident Recorder — draggable floating entry point (feature-flagged)
+                        if (incidentEnabled && !showIncidentRecorder) {
+                            IncidentFab(onOpen = { showIncidentRecorder = true })
+                        }
 
-                    if (incidentEnabled && showIncidentRecorder) {
-                        IncidentRecorderScreen(onClose = { showIncidentRecorder = false })
+                        if (incidentEnabled && showIncidentRecorder) {
+                            IncidentRecorderScreen(onClose = { showIncidentRecorder = false })
+                        }
                     }
                 }
             }
