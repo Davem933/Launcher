@@ -71,6 +71,7 @@ dependencies {
     implementation(libs.compose.ui.tooling.preview)
     implementation(libs.compose.material3)
     debugImplementation(libs.compose.ui.tooling)
+    testImplementation("junit:junit:4.13.2")
 
     implementation(libs.hilt.android)
     kapt(libs.hilt.compiler)
