@@ -22,8 +22,8 @@ Globální škála přes `LocalDensity`, ne ruční responzivita v každém comp
 Nový soubor `ui/theme/DeviceScale.kt`:
 
 - Konstanty `REFERENCE_WIDTH_DP = 1143f`, `REFERENCE_HEIGHT_DP = 686f`, `MIN_SCALE = 0.85f`, `MAX_SCALE = 1.6f`.
-- Čistá funkce `computeScale(widthDp: Float, heightDp: Float): Float` vrací `min(widthDp/REFERENCE_WIDTH_DP, heightDp/REFERENCE_HEIGHT_DP)` oříznuté na `[MIN_SCALE, MAX_SCALE]`.
-- Composable `DeviceScaleProvider(content)` čte rozměry z `LocalConfiguration` (`screenWidthDp`, `screenHeightDp`) a zabalí obsah do `CompositionLocalProvider(LocalDensity provides Density(base.density * scale, base.fontScale * scale))`.
+- Čistá funkce `computeScale(widthDp: Float, heightDp: Float): Float` vrací `min(widthDp/REFERENCE_WIDTH_DP, heightDp/REFERENCE_HEIGHT_DP)` oříznuté na `[MIN_SCALE, MAX_SCALE]`. Hodnota v pásmu `1.0 ± 0.03` se zaokrouhlí na přesně `1.0`, aby M10 zůstal beze změny, i když jeho reálné dp mírně neodpovídá referenci.
+- Composable `DeviceScaleProvider(content)` čte rozměry z `LocalConfiguration` (`screenWidthDp`, `screenHeightDp`) a zabalí obsah do `CompositionLocalProvider(LocalDensity provides Density(base.density * scale, base.fontScale))`. `fontScale` se záměrně nemění, protože `sp` se počítá jako `sp × fontScale × density` a písmo se tak přeškáluje samo přes density (násobení fontScale by škálovalo dvakrát).
 - Dolní mez 0,85 hlídá, aby touch targety (min 48 dp, dock slot 64 dp) neklesly příliš. Pokud testování ukáže jiný ideální práh, upraví se konstanta.
 
 ### 2. Napojení
@@ -41,7 +41,8 @@ Layout už používá váhy (1,85 : 1) a `fillMaxSize`. Přebytek (na 4:3 výšk
 - `ModalBottomSheet` (přepínání Mapa/Navigace) a `AppDrawer`.
 - `IncidentFab`: pozice a clamp v dp.
 - Navigační banner: `MANEUVER_BANNER_END_PADDING` (72 dp) musí dál odpovídat šířce tlačítka Ukončit (obojí se škáluje stejně, ale ověřit).
-- Přístupy přes `Resources.displayMetrics` nebo `px`↔`dp` konverze mimo Compose (grep při implementaci).
+- Přímé čtení `resources.displayMetrics.density` obchází škálování. `MapWidget.kt` (2 místa, `EdgeInsets` v pixelech) se přepne na `LocalDensity.current.density`. `WidgetScreen.kt` (`appWidgetMinWidth` atd.) naopak musí používat **reálnou** density, protože AppWidgety se renderují v reálných dp. `LongPressWidgetHost` (12 dp slop) zůstává na reálné density, protože jde o fyzickou toleranci prstu.
+- Mapboxí View komponenty (`MapboxManeuverView`, `MapboxTripProgressView`, puck) mají vlastní dp v reálné density a neškálují se. Posoudí se při testování na 13″.
 
 ## Testování
 
