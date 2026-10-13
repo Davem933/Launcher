@@ -1,6 +1,6 @@
 # CarLauncher
 
-> A personal Android car launcher for a tablet mounted on the dashboard. It replaces the default Android home screen with a fullscreen, landscape-only interface built for driving: a 3D Mapbox map with built-in turn-by-turn navigation, music, weather, a trip log and a manual dashcam.
+> A personal Android car launcher for a tablet mounted on the dashboard. It replaces the default Android home screen with a fullscreen, landscape-only interface built for driving: a 3D Mapbox map with built-in turn-by-turn navigation, music, weather, a trip log, **AI voice notes** and a manual **dashcam with licence-plate recognition**.
 
 ---
 
@@ -12,7 +12,7 @@ The launcher has three pages you swipe between (dot indicator above the dock):
 |------|---------|
 | **0 — Launcher** | Map / navigation panel + music, volume & brightness, weather & calendar |
 | **1 — Widgets** | Android AppWidget grid with swipeable widget stacks |
-| **2 — Trips** | Trip computer + driving log |
+| **2 — Trips** | AI voice notes + trip computer + driving log |
 
 ```
 +--------------------------------------+-------------------+
@@ -66,16 +66,24 @@ There is no status bar on purpose — the map gets the space. Time, battery and 
 - Long press on the left panel (1.5 s) switches between Map and this Navigation view; active navigation always wins
 - Waze, TomTom and HERE WeGo only post placeholder notifications, so they aren't supported
 
+### AI voice notes
+- One tap on the microphone records a thought or reminder; recording **stops by itself after 5 s of silence** (max 2 min), so you touch the screen only once while driving
+- [Groq](https://groq.com) turns it into a note: **Whisper large-v3** transcribes the Czech speech, **gpt-oss-120b** writes a short title, cleans up filler words and punctuation, and picks a category — 💡 Idea · ✅ Task · 🛒 Shopping · 🚗 Car · 📝 Other
+- **Works without signal** — the audio is queued (WorkManager) and processed automatically once the network is back; the audio file is deleted after processing
+- The widget shows the last three open notes; the full list has category filters, **swipe left = done** (struck through), **swipe right = delete**, and *Retry* for failed notes
+- Runs on Groq's free plan (no card needed); the key lives only in `local.properties`
+
 ### Trip computer & driving log
 - Trips are detected automatically (moving > 5 km/h for 10 s starts a trip, 30 s stationary ends it)
 - Stored in a Room database; live trip stats plus a history list
 - **CSV export** via the Android share sheet
 
-### Incident recorder (manual dashcam)
-- Draggable floating button opens a fullscreen camera overlay
-- Records video with CameraX (HD, no audio) to the app's external files folder
-- Logs GPS and detects **licence plates** (ML Kit text recognition, offline) during recording
-- Writes a JSON sidecar next to each `.mp4` with timestamps, GPS track and detected plates — the video itself is untouched
+### Incident recorder — dashcam video & licence plates
+- Draggable floating button (available on every page) opens a fullscreen camera overlay; one toggle starts / stops recording
+- **Video recording** with CameraX — HD with SD fallback, no audio (no microphone permission needed), saved as `incident_<date_time>.mp4` in the app's external files folder
+- **Licence-plate (SPZ) recognition** while recording — fully offline ML Kit text recognition on every 8th frame, filtered by a Czech / EU plate pattern; detected plates are boxed live in the preview
+- **GPS track** from its own location source (raw GPS, independent of the map pipeline)
+- A **JSON sidecar** next to each `.mp4` stores start / stop time, the GPS track and every detected plate with its position in the frame — the overlay is only drawn on screen, the video file itself stays untouched
 - Can be switched off with the `INCIDENT_RECORDER_ENABLED` build flag
 
 ### Music
@@ -110,8 +118,9 @@ There is no status bar on purpose — the map gets the space. Time, battery and 
 | Map | Mapbox Maps SDK (Standard style) |
 | Navigation & search | Mapbox Navigation SDK, Mapbox Search Box SDK |
 | Location | FusedLocationProviderClient + 2D Kalman filter |
-| Persistence | DataStore Preferences, Room (trips) |
+| Persistence | DataStore Preferences, Room (trips, voice notes) |
 | Camera / ML | CameraX, ML Kit Text Recognition v2 (bundled) |
+| Voice notes AI | Groq API — Whisper large-v3 (speech-to-text), gpt-oss-120b (structured JSON); MediaRecorder, WorkManager |
 | Media & 3rd-party nav | MediaSessionManager + NotificationListenerService |
 | Weather | Open-Meteo REST API |
 | Parking / speed limit | OpenStreetMap Overpass, Nominatim |
@@ -151,6 +160,17 @@ MAPBOX_ACCESS_TOKEN=pk.your_token
 MAPBOX_DOWNLOADS_TOKEN=sk.your_token
 ```
 
+### Groq key (voice notes)
+
+Free key from https://console.groq.com/keys — without it the app builds fine, the voice-notes widget just shows *"Chybí Groq API klíč"*.
+
+```properties
+# local.properties
+GROQ_API_KEY=gsk_your_key
+```
+
+> `local.properties` is git-ignored and not tracked — never commit it. APKs built with a Groq key contain it in `BuildConfig`, so don't publish them as releases.
+
 ### Gradle
 
 ```bash
@@ -176,6 +196,7 @@ $adb = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
 3. **Location** — grant *Precise location* when asked
 4. **Calendar** — grant `READ_CALENDAR` for the calendar widget
 5. **Camera** — asked the first time you open the incident recorder
+6. **Microphone** — asked the first time you tap the voice-notes microphone
 
 ---
 
@@ -193,6 +214,7 @@ ui/
   dock/        DockBar, SlotPicker
   widgets/     WidgetScreen, TripScreen, LongPressWidgetHost
   incident/    IncidentFab, IncidentRecorderScreen, IncidentOverlay
+  notes/       VoiceNotesWidget, VoiceNotesScreen, VoiceNotesViewModel
   theme/       CarColors (dark only)
 data/
   location/    LocationRepository, LocationProcessor, KalmanFilter
@@ -200,6 +222,8 @@ data/
                MapboxArrivalTeardownObserver
   trip/        TripDetector, TripRepository, Room DB, CsvExporter
   incident/    IncidentRecorder, IncidentLocationSource, PlateDetector
+  notes/       VoiceRecorder, SilenceDetector, GroqClient, NoteProcessor,
+               ProcessNoteWorker, VoiceNoteRepository, Room DB
   poi/         ParkingRepository
   speedlimit/  weather/  calendar/  media/  dock/  widgets/  model/
 di/            Hilt modules
