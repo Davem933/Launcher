@@ -47,6 +47,7 @@ import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -223,6 +224,9 @@ fun MapWidget(
     viewModel: MapViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
+    // Škálovaná (UI) density – EdgeInsets jsou v pixelech a kryjí Compose prvky, které se škálují
+    // přes DeviceScaleProvider; resources.displayMetrics.density by škálování obešlo.
+    val uiDensity = LocalDensity.current.density
     // Use the Activity lifecycle directly — HorizontalPager gives each page its own
     // LocalLifecycleOwner that may not advance to RESUMED while the page is offscreen,
     // which would leave MapView stuck and rendering a black surface.
@@ -381,11 +385,10 @@ fun MapWidget(
             }
             // EdgeInsets are pixels, not dp (same convention as followingPadding above) — top is
             // generous to clear SearchOverlay's category-results header + list card.
-            val density = context.resources.displayMetrics.density
             map.cameraForCoordinates(
                 results.map { it.coordinate },
                 CameraOptions.Builder().build(),
-                EdgeInsets(300.0 * density, 48.0 * density, 96.0 * density, 48.0 * density),
+                EdgeInsets(300.0 * uiDensity, 48.0 * uiDensity, 96.0 * uiDensity, 48.0 * uiDensity),
                 null,
                 null,
             ) { camera -> map.setCamera(camera) }
@@ -643,12 +646,11 @@ fun MapWidget(
                     camera.addCameraAnimationsLifecycleListener(
                         NavigationBasicGesturesHandler(navigationCamera)
                     )
-                    val density = context.resources.displayMetrics.density
                     viewportDataSource.followingPadding = EdgeInsets(
-                        140.0 * density,
-                        24.0 * density,
-                        110.0 * density,
-                        24.0 * density,
+                        140.0 * uiDensity,
+                        24.0 * uiDensity,
+                        110.0 * uiDensity,
+                        24.0 * uiDensity,
                     )
                     // Style fetch is online-only (no offline fallback in this phase) — log failures
                     // so a no-signal black map is diagnosable instead of silently inert.
