@@ -54,6 +54,9 @@ import com.example.carlauncher.ui.incident.IncidentFab
 import com.example.carlauncher.ui.incident.IncidentRecorderScreen
 import com.example.carlauncher.ui.launcher.LauncherScreen
 import com.example.carlauncher.ui.aurora.AuroraLauncherScreen
+import com.example.carlauncher.ui.aurora.AuroraFloatingDockInset
+import com.example.carlauncher.ui.aurora.AuroraMapScreen
+import com.example.carlauncher.data.model.DockPosition
 import com.example.carlauncher.data.model.LauncherStyle
 import com.example.carlauncher.ui.theme.CarLauncherTheme
 import com.example.carlauncher.ui.theme.DeviceScaleProvider
@@ -140,6 +143,11 @@ class MainActivity : ComponentActivity() {
                     val showAppDrawer by dockVm.showAppDrawer.collectAsStateWithLifecycle()
                     val showSettings by dockVm.showSettings.collectAsStateWithLifecycle()
                     val launcherStyle by dockVm.style.collectAsStateWithLifecycle()
+                    val dockPosition by dockVm.position.collectAsStateWithLifecycle()
+                    // Aurora mapa + bottom dock: the dock floats over the pages (DockScaffold).
+                    val dockFloating = launcherStyle == LauncherStyle.AURORA_MAP &&
+                        dockPosition == DockPosition.BOTTOM
+                    val nonMapPagePadding = if (dockFloating) AuroraFloatingDockInset else 0.dp
 
                     Box(modifier = Modifier.fillMaxSize()) {
                         // Dock sits OUTSIDE the pager so it stays fixed while the pages swipe.
@@ -147,7 +155,7 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier
                                 .fillMaxSize()
                                 .background(
-                                    if (launcherStyle == LauncherStyle.AURORA) Color.Black else CarColors.Bg
+                                    if (launcherStyle.isAurora) Color.Black else CarColors.Bg
                                 ),
                             onLaunchSplitScreen = { pkg1, pkg2 -> launchSplitScreen(pkg1, pkg2) }
                         ) {
@@ -167,11 +175,19 @@ class MainActivity : ComponentActivity() {
                                             LauncherStyle.AURORA -> AuroraLauncherScreen(
                                                 onMapTouchActiveChanged = { active -> mapTouchActive = active }
                                             )
+                                            LauncherStyle.AURORA_MAP -> AuroraMapScreen(
+                                                dockFloating = dockFloating,
+                                                onMapTouchActiveChanged = { active -> mapTouchActive = active }
+                                            )
                                         }
-                                        1 -> WidgetScreen(
-                                            onAddWidget = { slotIndex -> launchWidgetPicker(slotIndex) }
-                                        )
-                                        2 -> TripScreen()
+                                        1 -> Box(Modifier.padding(bottom = nonMapPagePadding)) {
+                                            WidgetScreen(
+                                                onAddWidget = { slotIndex -> launchWidgetPicker(slotIndex) }
+                                            )
+                                        }
+                                        2 -> Box(Modifier.padding(bottom = nonMapPagePadding)) {
+                                            TripScreen()
+                                        }
                                     }
                                 }
 

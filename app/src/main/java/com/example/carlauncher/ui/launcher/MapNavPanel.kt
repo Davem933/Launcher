@@ -8,6 +8,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -204,6 +205,9 @@ fun MapNavPanel(
     speedLimitKmh: Int = 50,
     modifier: Modifier = Modifier,
     onTouchActiveChanged: (Boolean) -> Unit = {},
+    // Aurora mapa (2b): map is the full-screen background with UI floating over it — see MapWidget.
+    fullBleed: Boolean = false,
+    overlayInsets: PaddingValues = PaddingValues(0.dp),
 ) {
     var manualView by remember { mutableStateOf<PanelView?>(null) }
     var showPicker by remember { mutableStateOf(false) }
@@ -217,11 +221,14 @@ fun MapNavPanel(
         when (effectiveView) {
             PanelView.MAP -> MapWidget(
                 modifier = Modifier.fillMaxSize(),
+                fullBleed = fullBleed,
+                overlayInsets = overlayInsets,
             )
+            // No map behind it, so the nav panel simply keeps out of the floating UI's way.
             PanelView.NAV -> NavAreaWidget(
                 speedKmh = speedKmh,
                 speedLimitKmh = speedLimitKmh,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().padding(overlayInsets),
             )
         }
     }

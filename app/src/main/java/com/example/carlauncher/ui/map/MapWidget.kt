@@ -1,5 +1,9 @@
 package com.example.carlauncher.ui.map
 
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -221,12 +225,27 @@ private class LongHolder {
 @Composable
 fun MapWidget(
     modifier: Modifier = Modifier,
+    // Full-bleed (Aurora mapa, design 2b): no rounded clip/border — the map is the background.
+    fullBleed: Boolean = false,
+    // Space covered by UI floating over the map (2b's right card column, floating dock). The
+    // map's own overlays (search, maneuver banner, Ukončit, Moje poloha…) stay inside it and the
+    // camera centers the puck in the visible remainder.
+    overlayInsets: PaddingValues = PaddingValues(0.dp),
     viewModel: MapViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     // Škálovaná (UI) density – EdgeInsets jsou v pixelech a kryjí Compose prvky, které se škálují
     // přes DeviceScaleProvider; resources.displayMetrics.density by škálování obešlo.
     val uiDensity = LocalDensity.current.density
+    val insetEndDp = overlayInsets.calculateEndPadding(LayoutDirection.Ltr).value.toDouble()
+    val insetBottomDp = overlayInsets.calculateBottomPadding().value.toDouble()
+    val insetTopDp = overlayInsets.calculateTopPadding().value.toDouble()
+    val insetStartDp = overlayInsets.calculateStartPadding(LayoutDirection.Ltr).value.toDouble()
+    // Free-drive camera padding (pixels): keeps the puck centered in the uncovered map area.
+    val freeDrivePadding = EdgeInsets(
+        insetTopDp * uiDensity, insetStartDp * uiDensity,
+        insetBottomDp * uiDensity, insetEndDp * uiDensity,
+    )
     // Use the Activity lifecycle directly — HorizontalPager gives each page its own
     // LocalLifecycleOwner that may not advance to RESUMED while the page is offscreen,
     // which would leave MapView stuck and rendering a black surface.
@@ -388,10 +407,16 @@ fun MapWidget(
             map.cameraForCoordinates(
                 results.map { it.coordinate },
                 CameraOptions.Builder().build(),
-                EdgeInsets(300.0 * uiDensity, 48.0 * uiDensity, 96.0 * uiDensity, 48.0 * uiDensity),
+                EdgeInsets(
+                    (300.0 + insetTopDp) * uiDensity, (48.0 + insetStartDp) * uiDensity,
+                    (96.0 + insetBottomDp) * uiDensity, (48.0 + insetEndDp) * uiDensity,
+                ),
                 null,
                 null,
             ) { camera -> map.setCamera(camera) }
+        } else if (insetEndDp + insetBottomDp + insetTopDp + insetStartDp > 0.0) {
+            // Leaving category mode: the fit above may have left its own padding on the camera.
+            map?.setCamera(CameraOptions.Builder().padding(freeDrivePadding).build())
         }
     }
 
@@ -587,7 +612,7 @@ fun MapWidget(
     }
 
     Box(
-        modifier = modifier
+        modifier = if (fullBleed) modifier else modifier
             .clip(RoundedCornerShape(24.dp))
             .border(width = 1.dp, color = Color(0xFF2A2C35), shape = RoundedCornerShape(24.dp))
     ) {
@@ -647,11 +672,14 @@ fun MapWidget(
                         NavigationBasicGesturesHandler(navigationCamera)
                     )
                     viewportDataSource.followingPadding = EdgeInsets(
-                        140.0 * uiDensity,
-                        24.0 * uiDensity,
-                        110.0 * uiDensity,
-                        24.0 * uiDensity,
+                        (140.0 + insetTopDp) * uiDensity,
+                        (24.0 + insetStartDp) * uiDensity,
+                        (110.0 + insetBottomDp) * uiDensity,
+                        (24.0 + insetEndDp) * uiDensity,
                     )
+                    // Free-drive: camera padding persists across later easeTo calls, so the puck
+                    // centers in the part of the map not covered by floating UI.
+                    mapboxMap.setCamera(CameraOptions.Builder().padding(freeDrivePadding).build())
                     // Style fetch is online-only (no offline fallback in this phase) — log failures
                     // so a no-signal black map is diagnosable instead of silently inert.
                     mapboxMap.subscribeMapLoadingError { error ->
@@ -792,222 +820,224 @@ fun MapWidget(
             modifier = Modifier.fillMaxSize()
         )
 
-        // Destination search — matches the reference app's search-bar-over-map convention.
-        // Hidden while isNavigating: the maneuver banner below occupies the same TopCenter
-        // overlay slot, and showing both stacked at once would look broken. It's the entry
-        // point for free-drive only; once guidance starts, the maneuver banner is the
-        // equivalent top overlay (design spec's free-drive vs. active-navigation split).
-        //
-        // Two states, mutually exclusive: collapsed shows the compact top-left button
-        // (DestinationSearchBar); expanded shows the full-panel takeover (SearchOverlay). The
-        // overlay owns its own search/category/history logic — this composable only supplies
-        // the current GPS fix and the route-request callback, exactly as it did for the old
-        // single-widget search bar.
-        if (!isNavigating && !searchExpanded && tappedPoi == null) {
-            Column(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(16.dp)
-            ) {
-                DestinationSearchBar(onClick = { searchExpanded = true })
-                if (routeRequestError != null) {
-                    Text(
-                        text = routeRequestError.orEmpty(),
-                        color = CarColors.Danger,
-                        fontSize = 14.sp,
-                        modifier = Modifier.padding(top = 8.dp, start = 4.dp)
-                    )
-                }
-            }
-        }
-
-        if (!isNavigating && searchExpanded) {
-            SearchOverlay(
-                currentLocation = location,
-                onDismiss = { searchExpanded = false },
-                onCategoryResultsChanged = updateCategoryPins,
-                onDestinationSelected = { point, _ -> requestRoute(point) },
-                modifier = Modifier.fillMaxSize()
-            )
-        }
-
-        // Autozen-style POI/parking popup — mutually exclusive with the search bar/overlay above
-        // (both would otherwise fight for the same TopStart/TopCenter real estate). Only Dismiss
-        // and Navigovat close it; there's no generic map-click fallback in this iteration (see
-        // the "only real POI + parking" scope decision), so tapping empty map elsewhere leaves it
-        // open.
-        val poi = tappedPoi
-        if (!isNavigating && poi != null) {
-            val distanceText = remember(poi, location) {
-                val currentLoc = location ?: return@remember null
-                val results = FloatArray(1)
-                android.location.Location.distanceBetween(
-                    currentLoc.lat, currentLoc.lng, poi.point.latitude(), poi.point.longitude(), results
-                )
-                formatPoiDistance(results[0])
-            }
-            Column(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxWidth()
-                    .padding(16.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(CarColors.Surface2)
-                    .padding(20.dp)
-            ) {
-                Text(text = poi.title, color = CarColors.Text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                if (distanceText != null) {
-                    Text(
-                        text = distanceText,
-                        color = CarColors.Text2,
-                        fontSize = 15.sp,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
-                Row(
-                    modifier = Modifier.padding(top = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+        Box(Modifier.matchParentSize().padding(overlayInsets)) {
+            // Destination search — matches the reference app's search-bar-over-map convention.
+            // Hidden while isNavigating: the maneuver banner below occupies the same TopCenter
+            // overlay slot, and showing both stacked at once would look broken. It's the entry
+            // point for free-drive only; once guidance starts, the maneuver banner is the
+            // equivalent top overlay (design spec's free-drive vs. active-navigation split).
+            //
+            // Two states, mutually exclusive: collapsed shows the compact top-left button
+            // (DestinationSearchBar); expanded shows the full-panel takeover (SearchOverlay). The
+            // overlay owns its own search/category/history logic — this composable only supplies
+            // the current GPS fix and the route-request callback, exactly as it did for the old
+            // single-widget search bar.
+            if (!isNavigating && !searchExpanded && tappedPoi == null) {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(16.dp)
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(28.dp))
-                            .border(1.dp, CarColors.BorderSoft, RoundedCornerShape(28.dp))
-                            .clickable { tappedPoi = null }
-                            .padding(vertical = 14.dp),
-                        horizontalArrangement = Arrangement.Center,
-                    ) {
-                        Icon(Icons.Default.Close, contentDescription = null, tint = CarColors.Text2)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Zrušit", color = CarColors.Text2, fontSize = 16.sp)
-                    }
-                    Row(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(28.dp))
-                            .background(CarColors.Accent)
-                            .clickable {
-                                tappedPoi = null
-                                requestRoute(poi.point)
-                            }
-                            .padding(vertical = 14.dp),
-                        horizontalArrangement = Arrangement.Center,
-                    ) {
-                        Icon(Icons.Default.Navigation, contentDescription = null, tint = CarColors.Text)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Navigovat", color = CarColors.Text, fontSize = 16.sp)
+                    DestinationSearchBar(onClick = { searchExpanded = true })
+                    if (routeRequestError != null) {
+                        Text(
+                            text = routeRequestError.orEmpty(),
+                            color = CarColors.Danger,
+                            fontSize = 14.sp,
+                            modifier = Modifier.padding(top = 8.dp, start = 4.dp)
+                        )
                     }
                 }
             }
-        }
 
-        // Active turn-by-turn overlays — maneuver banner (TopCenter, replaces the search bar
-        // above) and trip progress (BottomCenter), fed by routeProgressObserver above. Each is
-        // gated on its own `?.let` rather than isNavigating alone, so it simply doesn't render
-        // until the first RouteProgress arrives (including right after a panel-switch-back —
-        // see the isNavigating remember{} comment for why that can start true immediately).
-        if (isNavigating) {
-            currentManeuvers?.let { maneuvers ->
-                AndroidView(
-                    // Final review I-1: extra end padding keeps the banner's right-hand content
-                    // (step distance / lane guidance) clear of the Ukončit IconButton below —
-                    // see MANEUVER_BANNER_END_PADDING for how the number is derived.
+            if (!isNavigating && searchExpanded) {
+                SearchOverlay(
+                    currentLocation = location,
+                    onDismiss = { searchExpanded = false },
+                    onCategoryResultsChanged = updateCategoryPins,
+                    onDestinationSelected = { point, _ -> requestRoute(point) },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+
+            // Autozen-style POI/parking popup — mutually exclusive with the search bar/overlay above
+            // (both would otherwise fight for the same TopStart/TopCenter real estate). Only Dismiss
+            // and Navigovat close it; there's no generic map-click fallback in this iteration (see
+            // the "only real POI + parking" scope decision), so tapping empty map elsewhere leaves it
+            // open.
+            val poi = tappedPoi
+            if (!isNavigating && poi != null) {
+                val distanceText = remember(poi, location) {
+                    val currentLoc = location ?: return@remember null
+                    val results = FloatArray(1)
+                    android.location.Location.distanceBetween(
+                        currentLoc.lat, currentLoc.lng, poi.point.latitude(), poi.point.longitude(), results
+                    )
+                    formatPoiDistance(results[0])
+                }
+                Column(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .fillMaxWidth()
-                        .padding(
-                            start = 16.dp,
-                            top = 16.dp,
-                            end = MANEUVER_BANNER_END_PADDING,
-                            bottom = 16.dp,
-                        ),
-                    factory = { ctx ->
-                        // Final review I-3: SDK defaults are light (blue-grey #37516F banner);
-                        // re-tint to CarColors so the banner isn't a glare source at night.
-                        MapboxManeuverView(ctx).apply {
-                            updateManeuverViewOptions(darkManeuverViewOptions())
+                        .padding(16.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(CarColors.Surface2)
+                        .padding(20.dp)
+                ) {
+                    Text(text = poi.title, color = CarColors.Text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    if (distanceText != null) {
+                        Text(
+                            text = distanceText,
+                            color = CarColors.Text2,
+                            fontSize = 15.sp,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.padding(top = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(28.dp))
+                                .border(1.dp, CarColors.BorderSoft, RoundedCornerShape(28.dp))
+                                .clickable { tappedPoi = null }
+                                .padding(vertical = 14.dp),
+                            horizontalArrangement = Arrangement.Center,
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = null, tint = CarColors.Text2)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Zrušit", color = CarColors.Text2, fontSize = 16.sp)
                         }
-                    },
-                    update = { view -> view.renderManeuvers(ExpectedFactory.createValue(maneuvers)) }
-                )
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(28.dp))
+                                .background(CarColors.Accent)
+                                .clickable {
+                                    tappedPoi = null
+                                    requestRoute(poi.point)
+                                }
+                                .padding(vertical = 14.dp),
+                            horizontalArrangement = Arrangement.Center,
+                        ) {
+                            Icon(Icons.Default.Navigation, contentDescription = null, tint = CarColors.Text)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Navigovat", color = CarColors.Text, fontSize = 16.sp)
+                        }
+                    }
+                }
             }
-            currentTripProgress?.let { progress ->
-                AndroidView(
+
+            // Active turn-by-turn overlays — maneuver banner (TopCenter, replaces the search bar
+            // above) and trip progress (BottomCenter), fed by routeProgressObserver above. Each is
+            // gated on its own `?.let` rather than isNavigating alone, so it simply doesn't render
+            // until the first RouteProgress arrives (including right after a panel-switch-back —
+            // see the isNavigating remember{} comment for why that can start true immediately).
+            if (isNavigating) {
+                currentManeuvers?.let { maneuvers ->
+                    AndroidView(
+                        // Final review I-1: extra end padding keeps the banner's right-hand content
+                        // (step distance / lane guidance) clear of the Ukončit IconButton below —
+                        // see MANEUVER_BANNER_END_PADDING for how the number is derived.
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .fillMaxWidth()
+                            .padding(
+                                start = 16.dp,
+                                top = 16.dp,
+                                end = MANEUVER_BANNER_END_PADDING,
+                                bottom = 16.dp,
+                            ),
+                        factory = { ctx ->
+                            // Final review I-3: SDK defaults are light (blue-grey #37516F banner);
+                            // re-tint to CarColors so the banner isn't a glare source at night.
+                            MapboxManeuverView(ctx).apply {
+                                updateManeuverViewOptions(darkManeuverViewOptions())
+                            }
+                        },
+                        update = { view -> view.renderManeuvers(ExpectedFactory.createValue(maneuvers)) }
+                    )
+                }
+                currentTripProgress?.let { progress ->
+                    AndroidView(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .height(64.dp),
+                        factory = { ctx ->
+                            // Final review I-3: the SDK default background is @color/colorSurface =
+                            // pure white (in Mapbox's values-night too), i.e. a full-width glowing
+                            // bar across the bottom of the map at night.
+                            MapboxTripProgressView(ctx).apply {
+                                updateStyle(R.style.CarTripProgressView)
+                            }
+                        },
+                        update = { view -> view.render(progress) }
+                    )
+                }
+                // Ukončit — ends active Mapbox guidance and restores Fáze 2's free-drive default
+                // (this is a completely separate control from NavWidget's own "Ukončit", which
+                // ends the unrelated notification-based navigation panel).
+                IconButton(
+                    onClick = endGuidance,
                     modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .height(64.dp),
-                    factory = { ctx ->
-                        // Final review I-3: the SDK default background is @color/colorSurface =
-                        // pure white (in Mapbox's values-night too), i.e. a full-width glowing
-                        // bar across the bottom of the map at night.
-                        MapboxTripProgressView(ctx).apply {
-                            updateStyle(R.style.CarTripProgressView)
-                        }
-                    },
-                    update = { view -> view.render(progress) }
-                )
+                        .align(Alignment.TopEnd)
+                        // Counted into MANEUVER_BANNER_END_PADDING — changing it moves the banner too.
+                        .padding(END_GUIDANCE_BUTTON_PADDING)
+                        .clip(CircleShape)
+                        .background(CarColors.Surface2)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Ukončit navigaci",
+                        tint = CarColors.Text
+                    )
+                }
             }
-            // Ukončit — ends active Mapbox guidance and restores Fáze 2's free-drive default
-            // (this is a completely separate control from NavWidget's own "Ukončit", which
-            // ends the unrelated notification-based navigation panel).
+
+            // "Moje poloha" — recenters on the current GPS fix, matching the locate-me button found
+            // in autozen and other navigation apps. Shown in both free-drive and active navigation
+            // (unlike the search bar/maneuver banner split above) since NavigationCamera doesn't
+            // resume following on its own after the user manually pans mid-route. Highlighted
+            // (CarColors.Accent) while the camera is actively following, dimmed otherwise — same
+            // convention as the reference app.
+            val isLocationFollowing = if (isNavigating) isNavCameraFollowing else isFollowing
             IconButton(
-                onClick = endGuidance,
+                onClick = {
+                    if (isNavigating) {
+                        mapState.navigationCamera?.requestNavigationCameraToFollowing()
+                    } else {
+                        isFollowing = true
+                        val currentLoc = location ?: return@IconButton
+                        val (snapLat, snapLng) = RouteSnapHelper.snapToRoute(
+                            currentLoc.lat, currentLoc.lng, viewModel.routePolyline.value
+                        )
+                        mapState.mapboxMap?.easeTo(
+                            CameraOptions.Builder()
+                                .center(Point.fromLngLat(snapLng, snapLat))
+                                .bearing(mapState.headingDeg)
+                                .build(),
+                            MapAnimationOptions.mapAnimationOptions { duration(500) }
+                        )
+                    }
+                },
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    // Counted into MANEUVER_BANNER_END_PADDING — changing it moves the banner too.
-                    .padding(END_GUIDANCE_BUTTON_PADDING)
+                    .align(Alignment.BottomEnd)
+                    .padding(
+                        end = LOCATE_BUTTON_PADDING,
+                        bottom = if (isNavigating) LOCATE_BUTTON_BOTTOM_PADDING_NAV else LOCATE_BUTTON_PADDING,
+                    )
                     .clip(CircleShape)
-                    .background(CarColors.Surface2)
+                    .background(if (isLocationFollowing) CarColors.Accent else CarColors.Surface2)
             ) {
                 Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Ukončit navigaci",
+                    imageVector = Icons.Default.MyLocation,
+                    contentDescription = "Moje poloha",
                     tint = CarColors.Text
                 )
             }
-        }
-
-        // "Moje poloha" — recenters on the current GPS fix, matching the locate-me button found
-        // in autozen and other navigation apps. Shown in both free-drive and active navigation
-        // (unlike the search bar/maneuver banner split above) since NavigationCamera doesn't
-        // resume following on its own after the user manually pans mid-route. Highlighted
-        // (CarColors.Accent) while the camera is actively following, dimmed otherwise — same
-        // convention as the reference app.
-        val isLocationFollowing = if (isNavigating) isNavCameraFollowing else isFollowing
-        IconButton(
-            onClick = {
-                if (isNavigating) {
-                    mapState.navigationCamera?.requestNavigationCameraToFollowing()
-                } else {
-                    isFollowing = true
-                    val currentLoc = location ?: return@IconButton
-                    val (snapLat, snapLng) = RouteSnapHelper.snapToRoute(
-                        currentLoc.lat, currentLoc.lng, viewModel.routePolyline.value
-                    )
-                    mapState.mapboxMap?.easeTo(
-                        CameraOptions.Builder()
-                            .center(Point.fromLngLat(snapLng, snapLat))
-                            .bearing(mapState.headingDeg)
-                            .build(),
-                        MapAnimationOptions.mapAnimationOptions { duration(500) }
-                    )
-                }
-            },
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(
-                    end = LOCATE_BUTTON_PADDING,
-                    bottom = if (isNavigating) LOCATE_BUTTON_BOTTOM_PADDING_NAV else LOCATE_BUTTON_PADDING,
-                )
-                .clip(CircleShape)
-                .background(if (isLocationFollowing) CarColors.Accent else CarColors.Surface2)
-        ) {
-            Icon(
-                imageVector = Icons.Default.MyLocation,
-                contentDescription = "Moje poloha",
-                tint = CarColors.Text
-            )
         }
     }
 

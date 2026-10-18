@@ -54,6 +54,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -231,7 +232,7 @@ private fun formatMs(ms: Long): String {
 // ── Volume / brightness — vertical sliders, absolute touch position sets the level ───────────
 
 @Composable
-fun AuroraVolumeSlider(modifier: Modifier = Modifier) {
+fun AuroraVolumeSlider(modifier: Modifier = Modifier, horizontal: Boolean = false) {
     val context = LocalContext.current
     val audio   = remember { context.getSystemService(AudioManager::class.java) }
     val maxVol  = remember { audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC) }
@@ -242,6 +243,7 @@ fun AuroraVolumeSlider(modifier: Modifier = Modifier) {
         level = level,
         icon = Icons.Filled.VolumeUp,
         contentDescription = "Hlasitost",
+        horizontal = horizontal,
         modifier = modifier,
         onLevelChange = { new ->
             level = new
@@ -251,7 +253,7 @@ fun AuroraVolumeSlider(modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun AuroraBrightnessSlider(modifier: Modifier = Modifier) {
+fun AuroraBrightnessSlider(modifier: Modifier = Modifier, horizontal: Boolean = false) {
     val context = LocalContext.current
     val window  = remember { (context as? Activity)?.window }
     var level   by remember {
@@ -261,6 +263,7 @@ fun AuroraBrightnessSlider(modifier: Modifier = Modifier) {
         level = level,
         icon = Icons.Filled.WbSunny,
         contentDescription = "Jas",
+        horizontal = horizontal,
         modifier = modifier,
         onLevelChange = { new ->
             level = new.coerceAtLeast(0.01f)
@@ -280,8 +283,14 @@ private fun AuroraSlider(
     contentDescription: String,
     onLevelChange: (Float) -> Unit,
     modifier: Modifier = Modifier,
+    // Vertical (2a) fills bottom→top; horizontal (2b pill) fills left→right.
+    horizontal: Boolean = false,
 ) {
     val onChange by rememberUpdatedState(onLevelChange)
+    val levelAt: (Offset, IntSize) -> Float = { pos, sz ->
+        if (horizontal) (pos.x / sz.width).coerceIn(0f, 1f)
+        else (1f - pos.y / sz.height).coerceIn(0f, 1f)
+    }
     Box(
         modifier = modifier
             .clip(AuroraCardShape)
@@ -291,29 +300,35 @@ private fun AuroraSlider(
                 awaitEachGesture {
                     val down = awaitFirstDown()
                     down.consume()
-                    onChange((1f - down.position.y / size.height).coerceIn(0f, 1f))
+                    onChange(levelAt(down.position, size))
                     while (true) {
                         val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
                         if (!change.pressed) break
                         change.consume()
-                        onChange((1f - change.position.y / size.height).coerceIn(0f, 1f))
+                        onChange(levelAt(change.position, size))
                     }
                 }
             }
     ) {
         // Light icon on the empty track…
-        SliderIcon(icon, contentDescription, AuroraColors.Text)
+        SliderIcon(icon, contentDescription, AuroraColors.Text, horizontal)
         // …and a dark copy inside the white fill, clipped to it — mimics the design's
         // mix-blend-mode:difference so the icon inverts exactly where the fill covers it.
         Box(
-            modifier = Modifier
+            modifier = if (horizontal) Modifier
+                .align(Alignment.CenterStart)
+                .fillMaxHeight()
+                .fillMaxWidth(level)
+                .clipToBounds()
+                .background(AuroraColors.Text)
+            else Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .fillMaxHeight(level)
                 .clipToBounds()
                 .background(AuroraColors.Text)
         ) {
-            SliderIcon(icon, null, AuroraColors.Card)
+            SliderIcon(icon, null, AuroraColors.Card, horizontal)
         }
     }
 }
@@ -322,11 +337,16 @@ private fun AuroraSlider(
 private fun androidx.compose.foundation.layout.BoxScope.SliderIcon(
     icon: ImageVector,
     contentDescription: String?,
-    tint: Color
+    tint: Color,
+    horizontal: Boolean,
 ) {
     Icon(
         icon, contentDescription = contentDescription, tint = tint,
-        modifier = Modifier
+        modifier = if (horizontal) Modifier
+            .align(Alignment.CenterStart)
+            .padding(start = 18.dp)
+            .size(22.dp)
+        else Modifier
             .align(Alignment.BottomCenter)
             .padding(bottom = 18.dp)
             .size(26.dp)

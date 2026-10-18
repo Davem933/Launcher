@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -30,8 +32,20 @@ fun DockScaffold(
     val position by viewModel.position.collectAsStateWithLifecycle()
     val style    by viewModel.style.collectAsStateWithLifecycle()
 
-    when (position) {
-        DockPosition.BOTTOM -> Column(modifier = modifier) {
+    when {
+        // Aurora mapa (2b): the glass pill floats over the content (the full-screen map) instead
+        // of taking its own strip; pages that aren't a map pad themselves (see MainActivity).
+        position == DockPosition.BOTTOM && style == LauncherStyle.AURORA_MAP -> Box(modifier = modifier) {
+            Box(modifier = Modifier.fillMaxSize()) { content() }
+            DockBar(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 16.dp),
+                onLaunchSplitScreen = onLaunchSplitScreen
+            )
+        }
+
+        position == DockPosition.BOTTOM -> Column(modifier = modifier) {
             Box(modifier = Modifier.fillMaxWidth().weight(1f)) { content() }
             DockBar(
                 modifier = Modifier
@@ -42,10 +56,10 @@ fun DockScaffold(
             )
         }
 
-        DockPosition.LEFT -> Row(modifier = modifier) {
+        else -> Row(modifier = modifier) {
             DockBar(
                 // Aurora's black dock column runs flush to the screen edge.
-                modifier = if (style == LauncherStyle.AURORA) Modifier
+                modifier = if (style.isAurora) Modifier
                            else Modifier.padding(start = 12.dp),
                 onLaunchSplitScreen = onLaunchSplitScreen
             )

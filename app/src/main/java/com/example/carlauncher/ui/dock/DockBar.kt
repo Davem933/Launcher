@@ -93,7 +93,7 @@ fun DockBar(
     var pickerSlot by remember { mutableIntStateOf(-1) }
 
     val vertical = position == DockPosition.LEFT
-    val aurora = style == LauncherStyle.AURORA
+    val aurora = style.isAurora
     // 8 slots + menu + status have to fit the ~686dp screen height in the vertical dock.
     val slotSize = when {
         aurora   -> AuroraTileSize
@@ -153,8 +153,11 @@ fun DockBar(
             AuroraMenuTile(onClick = { viewModel.openAppDrawer() })
         }
     } else if (aurora) {
+        // Aurora mapa (2b): the pill floats over the map on its own — no full-width row, no
+        // status (the home page has its own clock card), so touches beside it reach the map.
+        val floating = style == LauncherStyle.AURORA_MAP
         Box(
-            modifier = modifier
+            modifier = if (floating) modifier else modifier
                 .fillMaxWidth()
                 .size(88.dp)
         ) {
@@ -180,11 +183,13 @@ fun DockBar(
                 AuroraMenuTile(onClick = { viewModel.openAppDrawer() })
             }
 
-            AuroraDockStatus(
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 20.dp)
-            )
+            if (!floating) {
+                AuroraDockStatus(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 20.dp)
+                )
+            }
         }
     } else if (vertical) {
         Column(
