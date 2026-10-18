@@ -21,7 +21,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ViewAgenda
@@ -57,6 +60,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.example.carlauncher.BuildConfig
 import com.example.carlauncher.data.model.DockPosition
+import com.example.carlauncher.data.model.LauncherStyle
 import com.example.carlauncher.ui.dock.DockViewModel
 import com.example.carlauncher.ui.theme.CarColors
 
@@ -69,6 +73,8 @@ fun LauncherSettingsScreen(
     var permissions by remember { mutableStateOf(permissionItems(context)) }
     val dockPosition by dockViewModel.position.collectAsStateWithLifecycle()
     var showDockPicker by remember { mutableStateOf(false) }
+    val launcherStyle by dockViewModel.style.collectAsStateWithLifecycle()
+    var showStylePicker by remember { mutableStateOf(false) }
 
     // Re-check on return from system settings. Activity lifecycle, not LocalLifecycleOwner —
     // the latter is per-page from HorizontalPager and need not reach RESUMED.
@@ -84,10 +90,25 @@ fun LauncherSettingsScreen(
     BackHandler(onBack = onDismiss)
 
     if (showDockPicker) {
-        DockPositionDialog(
+        ChoiceDialog(
+            title = "Poloha doku",
+            options = DockPosition.entries,
             current = dockPosition,
+            label = { it.label() },
+            icon = { it.icon() },
             onSelect = { dockViewModel.setPosition(it); showDockPicker = false },
             onDismiss = { showDockPicker = false }
+        )
+    }
+    if (showStylePicker) {
+        ChoiceDialog(
+            title = "Vzhled",
+            options = LauncherStyle.entries,
+            current = launcherStyle,
+            label = { it.label() },
+            icon = { it.icon() },
+            onSelect = { dockViewModel.setStyle(it); showStylePicker = false },
+            onDismiss = { showStylePicker = false }
         )
     }
 
@@ -125,6 +146,14 @@ fun LauncherSettingsScreen(
                 item { SectionHeader("Vzhled") }
                 item {
                     ValueRow(
+                        icon = Icons.Default.Palette,
+                        title = "Vzhled",
+                        value = launcherStyle.label(),
+                        onClick = { showStylePicker = true }
+                    )
+                }
+                item {
+                    ValueRow(
                         icon = Icons.Default.ViewAgenda,
                         title = "Dock",
                         value = dockPosition.label(),
@@ -150,20 +179,24 @@ fun LauncherSettingsScreen(
 }
 
 @Composable
-private fun DockPositionDialog(
-    current: DockPosition,
-    onSelect: (DockPosition) -> Unit,
+private fun <T> ChoiceDialog(
+    title: String,
+    options: List<T>,
+    current: T,
+    label: (T) -> String,
+    icon: (T) -> ImageVector,
+    onSelect: (T) -> Unit,
     onDismiss: () -> Unit
 ) {
     Dialog(onDismissRequest = onDismiss) {
         Surface(shape = RoundedCornerShape(24.dp), color = CarColors.Surface) {
             Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    "Poloha doku",
+                    title,
                     style = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = CarColors.Text),
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
-                DockPosition.entries.forEach { option ->
+                options.forEach { option ->
                     val selected = option == current
                     Row(
                         modifier = Modifier
@@ -176,13 +209,13 @@ private fun DockPositionDialog(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            option.icon(), contentDescription = null,
+                            icon(option), contentDescription = null,
                             tint = if (selected) CarColors.Accent else CarColors.Text2,
                             modifier = Modifier.size(24.dp)
                         )
                         Spacer(Modifier.width(16.dp))
                         Text(
-                            option.label(),
+                            label(option),
                             style = TextStyle(
                                 fontSize = 16.sp,
                                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
@@ -235,6 +268,16 @@ private fun DockPosition.label(): String = when (this) {
 private fun DockPosition.icon(): ImageVector = when (this) {
     DockPosition.BOTTOM -> Icons.Default.ViewAgenda
     DockPosition.LEFT   -> Icons.Default.ViewSidebar
+}
+
+private fun LauncherStyle.label(): String = when (this) {
+    LauncherStyle.CLASSIC -> "Klasický"
+    LauncherStyle.AURORA  -> "Aurora"
+}
+
+private fun LauncherStyle.icon(): ImageVector = when (this) {
+    LauncherStyle.CLASSIC -> Icons.Default.Dashboard
+    LauncherStyle.AURORA  -> Icons.Default.AutoAwesome
 }
 
 @Composable

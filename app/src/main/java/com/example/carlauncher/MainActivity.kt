@@ -53,6 +53,8 @@ import com.example.carlauncher.ui.theme.CarColors
 import com.example.carlauncher.ui.incident.IncidentFab
 import com.example.carlauncher.ui.incident.IncidentRecorderScreen
 import com.example.carlauncher.ui.launcher.LauncherScreen
+import com.example.carlauncher.ui.aurora.AuroraLauncherScreen
+import com.example.carlauncher.data.model.LauncherStyle
 import com.example.carlauncher.ui.theme.CarLauncherTheme
 import com.example.carlauncher.ui.theme.DeviceScaleProvider
 import com.example.carlauncher.ui.widgets.TripScreen
@@ -137,13 +139,16 @@ class MainActivity : ComponentActivity() {
                     val dockVm = hiltViewModel<DockViewModel>()
                     val showAppDrawer by dockVm.showAppDrawer.collectAsStateWithLifecycle()
                     val showSettings by dockVm.showSettings.collectAsStateWithLifecycle()
+                    val launcherStyle by dockVm.style.collectAsStateWithLifecycle()
 
                     Box(modifier = Modifier.fillMaxSize()) {
                         // Dock sits OUTSIDE the pager so it stays fixed while the pages swipe.
                         DockScaffold(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(CarColors.Bg),
+                                .background(
+                                    if (launcherStyle == LauncherStyle.AURORA) Color.Black else CarColors.Bg
+                                ),
                             onLaunchSplitScreen = { pkg1, pkg2 -> launchSplitScreen(pkg1, pkg2) }
                         ) {
                             Box(modifier = Modifier.fillMaxSize()) {
@@ -154,10 +159,15 @@ class MainActivity : ComponentActivity() {
                                     userScrollEnabled = !mapTouchActive,
                                 ) { page ->
                                     when (page) {
-                                        0 -> LauncherScreen(
-                                            isDark = isDark,
-                                            onMapTouchActiveChanged = { active -> mapTouchActive = active }
-                                        )
+                                        0 -> when (launcherStyle) {
+                                            LauncherStyle.CLASSIC -> LauncherScreen(
+                                                isDark = isDark,
+                                                onMapTouchActiveChanged = { active -> mapTouchActive = active }
+                                            )
+                                            LauncherStyle.AURORA -> AuroraLauncherScreen(
+                                                onMapTouchActiveChanged = { active -> mapTouchActive = active }
+                                            )
+                                        }
                                         1 -> WidgetScreen(
                                             onAddWidget = { slotIndex -> launchWidgetPicker(slotIndex) }
                                         )

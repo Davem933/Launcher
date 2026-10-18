@@ -13,6 +13,7 @@ import com.example.carlauncher.BuildConfig
 import com.example.carlauncher.data.dock.dockDataStore
 import com.example.carlauncher.data.model.DockPosition
 import com.example.carlauncher.data.model.DockSlot
+import com.example.carlauncher.data.model.LauncherStyle
 import com.example.carlauncher.data.settings.launcherDataStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -28,6 +29,7 @@ import javax.inject.Inject
 
 private val DOCK_KEY = stringPreferencesKey("dock_slots_v2")
 private val POSITION_KEY = stringPreferencesKey("dock_position")
+private val STYLE_KEY = stringPreferencesKey("launcher_style")
 
 // 8 configurable slots (Navigate is fixed 9th, not stored)
 // Split screen rule: packageName1 = nav (left), packageName2 = music (right)
@@ -78,9 +80,10 @@ class DockViewModel @Inject constructor(
 
     // Read once synchronously so a LEFT dock doesn't flash as BOTTOM (and re-lay-out the
     // whole screen) on every cold start; later changes arrive through the flow below.
-    private val _position = MutableStateFlow(
-        runBlocking { DockPosition.fromName(context.launcherDataStore.data.first()[POSITION_KEY]) }
-    )
+    // Same reasoning for the style: the home page must not flash Classic before switching.
+    private val initialPrefs = runBlocking { context.launcherDataStore.data.first() }
+
+    private val _position = MutableStateFlow(DockPosition.fromName(initialPrefs[POSITION_KEY]))
     val position: StateFlow<DockPosition> = _position.asStateFlow()
 
     fun setPosition(position: DockPosition) {
@@ -89,10 +92,20 @@ class DockViewModel @Inject constructor(
         }
     }
 
+    private val _style = MutableStateFlow(LauncherStyle.fromName(initialPrefs[STYLE_KEY]))
+    val style: StateFlow<LauncherStyle> = _style.asStateFlow()
+
+    fun setStyle(style: LauncherStyle) {
+        viewModelScope.launch {
+            context.launcherDataStore.edit { it[STYLE_KEY] = style.name }
+        }
+    }
+
     init {
         viewModelScope.launch {
             context.launcherDataStore.data.collect { prefs ->
                 _position.value = DockPosition.fromName(prefs[POSITION_KEY])
+                _style.value = LauncherStyle.fromName(prefs[STYLE_KEY])
             }
         }
         if (BuildConfig.DEBUG) logNavPackages()
