@@ -113,16 +113,16 @@ fun DockBar(
                 .padding(vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            MenuTile(onClick = { viewModel.openAppDrawer() })
+            DockStatusCluster(vertical = true)
 
-            // Slots centered in the space between the menu (top) and status (bottom).
+            // Slots centered in the space between the status cluster (top) and menu (bottom).
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) { slotTiles() }
 
-            DockStatusCluster(vertical = true)
+            MenuTile(onClick = { viewModel.openAppDrawer() })
         }
     } else {
         Box(
