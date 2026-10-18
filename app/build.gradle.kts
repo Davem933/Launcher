@@ -13,14 +13,21 @@ val localProps = Properties().apply {
     val f = rootProject.file("local.properties")
     if (f.exists()) f.inputStream().use { load(it) }
 }
-val mapboxAccessToken: String = localProps.getProperty("MAPBOX_ACCESS_TOKEN", "MAPBOX_TOKEN_HERE")
+// local.properties wins; otherwise the machine-wide ~/.gradle/gradle.properties, so a fresh
+// worktree (which never has local.properties) still builds with real keys.
+fun secret(name: String): String? =
+    localProps.getProperty(name)?.takeIf { it.isNotBlank() }
+        ?: providers.gradleProperty(name).orNull?.takeIf { it.isNotBlank() }
+            .also { if (it == null) logger.warn("⚠ $name chybí v local.properties i ~/.gradle/gradle.properties") }
+
+val mapboxAccessToken: String = secret("MAPBOX_ACCESS_TOKEN") ?: "MAPBOX_TOKEN_HERE"
 
 // Incident Recorder feature toggle — disable locally with INCIDENT_RECORDER_ENABLED=false
 val incidentRecorderEnabled: String = localProps.getProperty("INCIDENT_RECORDER_ENABLED", "true")
 
-// Groq API klíč pro hlasové poznámky (free plán) — jen v local.properties, nikdy v gitu.
-// Prázdný → widget ukáže "Chybí Groq API klíč" a nenahrává.
-val groqApiKey: String = localProps.getProperty("GROQ_API_KEY", "")
+// Groq API klíč pro hlasové poznámky (free plán) — local.properties nebo ~/.gradle/gradle.properties,
+// nikdy v gitu. Prázdný → widget ukáže "Chybí Groq API klíč" a nenahrává.
+val groqApiKey: String = secret("GROQ_API_KEY") ?: ""
 
 android {
     namespace = "com.example.carlauncher"
