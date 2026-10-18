@@ -361,15 +361,8 @@ private fun DockSlotTile(
         contentAlignment = Alignment.Center
     ) {
         when {
-            // Aurora draws the design's gradient + white-glyph tiles, not the apps' own icons.
-            aurora && slot is DockSlot.App -> AuroraAppTile(
-                slot.packageName, slotSize, shape,
-                Modifier.shadow(6.dp, shape, clip = false).auroraOutline(true, shape)
-            )
-            aurora && slot is DockSlot.SplitScreen -> AuroraSplitTile(
-                slot.packageName1, slot.packageName2, slotSize, shape,
-                Modifier.shadow(6.dp, shape, clip = false).auroraOutline(true, shape)
-            )
+            // Aurora keeps the apps' real icons (squircle + hairline, see AppTile) so they stay
+            // recognisable; only the empty slot uses the design's "+" tile.
             aurora && slot == DockSlot.Empty -> AuroraAddTile(slotSize, shape)
             slot is DockSlot.App         -> AppTile(slot.packageName, slotSize, shape, aurora)
             slot is DockSlot.SplitScreen -> SplitTile(slot.packageName1, slot.packageName2, slotSize, shape, aurora)
