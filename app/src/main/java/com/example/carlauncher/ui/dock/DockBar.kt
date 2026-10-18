@@ -18,10 +18,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Apps
@@ -38,7 +41,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
@@ -51,6 +58,7 @@ import kotlinx.coroutines.withTimeout
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.carlauncher.data.model.DockPosition
 import com.example.carlauncher.data.model.DockSlot
+import com.example.carlauncher.data.model.LauncherStyle
 import com.example.carlauncher.ui.theme.CarColors
 
 private val DockBorderTop = Color(0xFF252530)
@@ -61,6 +69,17 @@ private val MenuSize      = 48.dp
 private val SlotSize      = 60.dp
 private val SlotSizeCompact = 52.dp   // vertical dock — 56dp touch target incl. padding
 
+// Aurora (Apple v2, screen 2a): squircle-ish tiles with a hairline inner outline.
+private val AuroraTileSize    = 58.dp
+private val AuroraTileShape   = RoundedCornerShape(13.dp)
+private val AuroraTileOutline = Color.White.copy(alpha = 0.20f)
+private val AuroraMenuBg      = Color.White.copy(alpha = 0.10f)
+private val AuroraGlyph       = Color(0xFFF5F5F7)
+private val AuroraPillBg      = Color(0x991E1E20)   // rgba(30,30,32,.6)
+private val AuroraPillOutline = Color.White.copy(alpha = 0.14f)
+private val AuroraPillShape   = RoundedCornerShape(30.dp)
+private val AuroraDockWidth   = 76.dp
+
 @Composable
 fun DockBar(
     modifier: Modifier = Modifier,
@@ -69,12 +88,18 @@ fun DockBar(
 ) {
     val slots by viewModel.slots.collectAsStateWithLifecycle()
     val position by viewModel.position.collectAsStateWithLifecycle()
+    val style    by viewModel.style.collectAsStateWithLifecycle()
     var editMode   by remember { mutableStateOf(false) }
     var pickerSlot by remember { mutableIntStateOf(-1) }
 
     val vertical = position == DockPosition.LEFT
+    val aurora = style == LauncherStyle.AURORA
     // 8 slots + menu + status have to fit the ~686dp screen height in the vertical dock.
-    val slotSize = if (vertical) SlotSizeCompact else SlotSize
+    val slotSize = when {
+        aurora   -> AuroraTileSize
+        vertical -> SlotSizeCompact
+        else     -> SlotSize
+    }
 
     val slotTiles: @Composable () -> Unit = {
         slots.forEachIndexed { index, slot ->
@@ -85,7 +110,8 @@ fun DockBar(
             DockSlotTile(
                 slot        = slot,
                 slotSize    = slotSize,
-                editMode    = editMode && !locked,
+                aurora      = aurora,
+                editMode   = editMode && !locked,
                 onClick     = {
                     when {
                         slot is DockSlot.SplitScreen -> onLaunchSplitScreen(
@@ -105,7 +131,62 @@ fun DockBar(
 
     // No shelf/card background — tiles float directly over whatever is behind the dock,
     // each tile carries its own shadow for legibility instead.
-    if (vertical) {
+    if (aurora && vertical) {
+        Column(
+            modifier = modifier
+                .fillMaxHeight()
+                .width(AuroraDockWidth)
+                .background(Color.Black)
+                .padding(vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            AuroraDockStatus()
+
+            // Tiles already carry a 4dp touch gutter, so 2dp spacing reads as ~6dp and
+            // keeps 8 slots + menu + status inside the ~686dp screen height.
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) { slotTiles() }
+
+            AuroraMenuTile(onClick = { viewModel.openAppDrawer() })
+        }
+    } else if (aurora) {
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .size(88.dp)
+        ) {
+            // Glass pill: app tiles, a hairline divider, then the all-apps tile.
+            Row(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .clip(AuroraPillShape)
+                    .background(AuroraPillBg)
+                    .border(0.5.dp, AuroraPillOutline, AuroraPillShape)
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                slotTiles()
+                Box(
+                    Modifier
+                        .padding(horizontal = 4.dp)
+                        .width(1.dp)
+                        .height(40.dp)
+                        .background(AuroraTileOutline)
+                )
+                AuroraMenuTile(onClick = { viewModel.openAppDrawer() })
+            }
+
+            AuroraDockStatus(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 20.dp)
+            )
+        }
+    } else if (vertical) {
         Column(
             modifier = modifier
                 .fillMaxHeight()
@@ -195,16 +276,48 @@ private fun MenuTile(onClick: () -> Unit, modifier: Modifier = Modifier) {
     }
 }
 
+@Composable
+private fun AuroraMenuTile(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .size(AuroraTileSize)
+            .clip(AuroraTileShape)
+            .background(AuroraMenuBg)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        // 2×2 rounded squares — the design's all-apps glyph.
+        Canvas(Modifier.size(22.dp)) {
+            val gap = size.width * 0.16f
+            val cell = (size.width - gap) / 2f
+            for (row in 0..1) for (col in 0..1) {
+                drawRoundRect(
+                    color = AuroraGlyph,
+                    topLeft = Offset(col * (cell + gap), row * (cell + gap)),
+                    size = Size(cell, cell),
+                    cornerRadius = CornerRadius(cell * 0.28f),
+                )
+            }
+        }
+    }
+}
+
+/** Aurora tiles get a 0.5dp white hairline on the inside of their shape. */
+private fun Modifier.auroraOutline(aurora: Boolean, shape: Shape): Modifier =
+    if (aurora) border(0.5.dp, AuroraTileOutline, shape) else this
+
 // ── Configurable slot tile ────────────────────────────────────────────────────
 
 @Composable
 private fun DockSlotTile(
     slot: DockSlot,
     slotSize: Dp,
+    aurora: Boolean,
     editMode: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
+    val shape = if (aurora) AuroraTileShape else SlotShape
     val wiggle = remember { Animatable(0f) }
     LaunchedEffect(editMode) {
         if (editMode) {
@@ -243,9 +356,9 @@ private fun DockSlotTile(
         contentAlignment = Alignment.Center
     ) {
         when (slot) {
-            is DockSlot.App         -> AppTile(slot.packageName, slotSize)
-            is DockSlot.SplitScreen -> SplitTile(slot.packageName1, slot.packageName2, slotSize)
-            DockSlot.Empty          -> EmptyTile(slotSize)
+            is DockSlot.App         -> AppTile(slot.packageName, slotSize, shape, aurora)
+            is DockSlot.SplitScreen -> SplitTile(slot.packageName1, slot.packageName2, slotSize, shape, aurora)
+            DockSlot.Empty          -> EmptyTile(slotSize, shape)
             DockSlot.Navigate       -> { /* Navigovat is in MapWidget overlay, not in dock */ }
         }
     }
@@ -254,27 +367,28 @@ private fun DockSlotTile(
 // ── Tile variants ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun AppTile(packageName: String, size: Dp) {
+private fun AppTile(packageName: String, size: Dp, shape: Shape, aurora: Boolean) {
     val icon = rememberAppIcon(packageName)
     AppIcon(
         drawable = icon,
         modifier = Modifier
             .size(size)
-            .shadow(6.dp, SlotShape, clip = false)
-            .clip(SlotShape)
+            .shadow(6.dp, shape, clip = false)
+            .clip(shape)
+            .auroraOutline(aurora, shape)
     )
 }
 
 @Composable
-private fun SplitTile(pkg1: String, pkg2: String, size: Dp) {
+private fun SplitTile(pkg1: String, pkg2: String, size: Dp, shape: Shape, aurora: Boolean) {
     val icon1 = rememberAppIcon(pkg1)
     val icon2 = rememberAppIcon(pkg2)
 
     Box(
         modifier = Modifier
             .size(size)
-            .shadow(6.dp, SlotShape, clip = false)
-            .clip(SlotShape)
+            .shadow(6.dp, shape, clip = false)
+            .clip(shape)
             .background(SlotBg)
     ) {
         Row(modifier = Modifier.fillMaxSize()) {
@@ -297,16 +411,18 @@ private fun SplitTile(pkg1: String, pkg2: String, size: Dp) {
                 modifier = Modifier.size(11.dp)
             )
         }
+        // Drawn last so the hairline sits over both icon halves.
+        Box(Modifier.fillMaxSize().auroraOutline(aurora, shape))
     }
 }
 
 @Composable
-private fun EmptyTile(size: Dp) {
+private fun EmptyTile(size: Dp, shape: Shape) {
     Box(
         modifier = Modifier
             .size(size)
-            .background(SlotBg.copy(alpha = 0.6f), SlotShape)
-            .border(1.dp, SlotBorder, SlotShape),
+            .background(SlotBg.copy(alpha = 0.6f), shape)
+            .border(1.dp, SlotBorder, shape),
         contentAlignment = Alignment.Center
     ) {
         Icon(Icons.Default.Add, contentDescription = "Přidat", tint = Color(0xFF444455),

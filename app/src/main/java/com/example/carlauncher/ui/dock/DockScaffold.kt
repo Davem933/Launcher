@@ -13,6 +13,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.carlauncher.data.model.DockPosition
+import com.example.carlauncher.data.model.LauncherStyle
 
 /**
  * Lays out a pager page around the dock according to the user's [DockPosition]:
@@ -27,6 +28,7 @@ fun DockScaffold(
     content: @Composable () -> Unit
 ) {
     val position by viewModel.position.collectAsStateWithLifecycle()
+    val style    by viewModel.style.collectAsStateWithLifecycle()
 
     when (position) {
         DockPosition.BOTTOM -> Column(modifier = modifier) {
@@ -42,7 +44,9 @@ fun DockScaffold(
 
         DockPosition.LEFT -> Row(modifier = modifier) {
             DockBar(
-                modifier = Modifier.padding(start = 12.dp),
+                // Aurora's black dock column runs flush to the screen edge.
+                modifier = if (style == LauncherStyle.AURORA) Modifier
+                           else Modifier.padding(start = 12.dp),
                 onLaunchSplitScreen = onLaunchSplitScreen
             )
             Box(modifier = Modifier.fillMaxHeight().weight(1f)) { content() }
