@@ -56,12 +56,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.carlauncher.ui.dock.DockScaffold
 import com.example.carlauncher.ui.theme.CarColors
 
 @Composable
 fun WidgetScreen(
-    onLaunchSplitScreen: (pkg1: String, pkg2: String) -> Unit = { _, _ -> },
     onAddWidget: (slotIndex: Int) -> Unit = {},
     viewModel: WidgetViewModel = hiltViewModel()
 ) {
@@ -85,12 +83,8 @@ fun WidgetScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    DockScaffold(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(CarColors.Bg),
-        onLaunchSplitScreen = onLaunchSplitScreen
-    ) {
+    // The dock lives in MainActivity (outside the pager) so it stays put while pages swipe.
+    Box(modifier = Modifier.fillMaxSize().background(CarColors.Bg)) {
       Column(modifier = Modifier.fillMaxSize()) {
         // ── Template picker button ────────────────────────────────────────────
         Row(

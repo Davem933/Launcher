@@ -2,6 +2,7 @@ package com.example.carlauncher.ui.widgets
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,15 +15,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.example.carlauncher.ui.dock.DockScaffold
 import com.example.carlauncher.ui.notes.VoiceNotesScreen
 import com.example.carlauncher.ui.notes.VoiceNotesWidget
 import com.example.carlauncher.ui.theme.CarColors
 
 @Composable
-fun TripScreen(
-    onLaunchSplitScreen: (pkg1: String, pkg2: String) -> Unit = { _, _ -> }
-) {
+fun TripScreen() {
     var showHistory by remember { mutableStateOf(false) }
     var showNotes by remember { mutableStateOf(false) }
     var notesInitialId by remember { mutableStateOf<Long?>(null) }
@@ -36,12 +34,8 @@ fun TripScreen(
         return
     }
 
-    DockScaffold(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(CarColors.Bg),
-        onLaunchSplitScreen = onLaunchSplitScreen
-    ) {
+    // The dock lives in MainActivity (outside the pager) so it stays put while pages swipe.
+    Box(modifier = Modifier.fillMaxSize().background(CarColors.Bg)) {
         Row(
             modifier = Modifier
                 .fillMaxSize()

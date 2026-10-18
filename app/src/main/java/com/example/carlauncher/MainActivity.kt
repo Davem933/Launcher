@@ -40,8 +40,16 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
-import com.example.carlauncher.data.model.DockPosition
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import com.example.carlauncher.ui.dock.DockScaffold
 import com.example.carlauncher.ui.dock.DockViewModel
+import com.example.carlauncher.ui.launcher.AppDrawer
+import com.example.carlauncher.ui.settings.LauncherSettingsScreen
+import com.example.carlauncher.ui.theme.CarColors
 import com.example.carlauncher.ui.incident.IncidentFab
 import com.example.carlauncher.ui.incident.IncidentRecorderScreen
 import com.example.carlauncher.ui.launcher.LauncherScreen
@@ -125,59 +133,80 @@ class MainActivity : ComponentActivity() {
                     // hijacked into a page swipe, since Pager has no way to negotiate gesture
                     // ownership with the native MapView's own gesture detector on its own.
                     var mapTouchActive by remember { mutableStateOf(false) }
-                    // Same Activity-scoped instance LauncherScreen/DockBar use — the page dots
-                    // would otherwise show through the fullscreen AppDrawer / Settings overlays.
+                    // Same Activity-scoped instance DockBar uses.
                     val dockVm = hiltViewModel<DockViewModel>()
                     val showAppDrawer by dockVm.showAppDrawer.collectAsStateWithLifecycle()
                     val showSettings by dockVm.showSettings.collectAsStateWithLifecycle()
 
                     Box(modifier = Modifier.fillMaxSize()) {
-                        HorizontalPager(
-                            state = pagerState,
-                            modifier = Modifier.fillMaxSize(),
-                            beyondViewportPageCount = 1,
-                            userScrollEnabled = !mapTouchActive,
-                        ) { page ->
-                            when (page) {
-                                0 -> LauncherScreen(
-                                    isDark = isDark,
-                                    onLaunchSplitScreen = { pkg1, pkg2 -> launchSplitScreen(pkg1, pkg2) },
-                                    onMapTouchActiveChanged = { active -> mapTouchActive = active }
-                                )
-                                1 -> WidgetScreen(
-                                    onLaunchSplitScreen = { pkg1, pkg2 -> launchSplitScreen(pkg1, pkg2) },
-                                    onAddWidget = { slotIndex -> launchWidgetPicker(slotIndex) }
-                                )
-                                2 -> TripScreen(
-                                    onLaunchSplitScreen = { pkg1, pkg2 -> launchSplitScreen(pkg1, pkg2) }
-                                )
+                        // Dock sits OUTSIDE the pager so it stays fixed while the pages swipe.
+                        DockScaffold(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(CarColors.Bg),
+                            onLaunchSplitScreen = { pkg1, pkg2 -> launchSplitScreen(pkg1, pkg2) }
+                        ) {
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                HorizontalPager(
+                                    state = pagerState,
+                                    modifier = Modifier.fillMaxSize(),
+                                    beyondViewportPageCount = 1,
+                                    userScrollEnabled = !mapTouchActive,
+                                ) { page ->
+                                    when (page) {
+                                        0 -> LauncherScreen(
+                                            isDark = isDark,
+                                            onMapTouchActiveChanged = { active -> mapTouchActive = active }
+                                        )
+                                        1 -> WidgetScreen(
+                                            onAddWidget = { slotIndex -> launchWidgetPicker(slotIndex) }
+                                        )
+                                        2 -> TripScreen()
+                                    }
+                                }
+
+                                Row(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .padding(bottom = 4.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    repeat(3) { i ->
+                                        Box(
+                                            modifier = Modifier
+                                                .size(6.dp)
+                                                .clip(CircleShape)
+                                                .background(
+                                                    if (pagerState.currentPage == i) Color.White
+                                                    else Color.White.copy(alpha = 0.35f)
+                                                )
+                                        )
+                                    }
+                                }
                             }
                         }
 
-                        val dockPosition by dockVm.position.collectAsStateWithLifecycle()
-                        if (!showAppDrawer && !showSettings) Row(
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                // Bottom dock: dots sit above it. Left dock: bottom edge is free,
-                                // so shift the center past the 100dp-wide dock column instead.
-                                .then(
-                                    if (dockPosition == DockPosition.LEFT)
-                                        Modifier.padding(start = 100.dp, bottom = 12.dp)
-                                    else Modifier.padding(bottom = 100.dp)
-                                ),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        // AppDrawer / Settings — fullscreen overlays above pager AND dock
+                        AnimatedVisibility(
+                            visible = showAppDrawer,
+                            enter = fadeIn(tween(200)) + slideInVertically(tween(200)) { it / 8 },
+                            exit  = fadeOut(tween(150))
                         ) {
-                            repeat(3) { i ->
-                                Box(
-                                    modifier = Modifier
-                                        .size(6.dp)
-                                        .clip(CircleShape)
-                                        .background(
-                                            if (pagerState.currentPage == i) Color.White
-                                            else Color.White.copy(alpha = 0.35f)
-                                        )
-                                )
-                            }
+                            AppDrawer(
+                                onAppClick = { packageName ->
+                                    dockVm.closeAppDrawer()
+                                    dockVm.launchApp(packageName)
+                                },
+                                onOpenSettings = { dockVm.openSettings() },
+                                onDismiss = { dockVm.closeAppDrawer() }
+                            )
+                        }
+                        AnimatedVisibility(
+                            visible = showSettings,
+                            enter = fadeIn(tween(200)) + slideInVertically(tween(200)) { it / 8 },
+                            exit  = fadeOut(tween(150))
+                        ) {
+                            LauncherSettingsScreen(onDismiss = { dockVm.closeSettings() })
                         }
 
                         // Incident Recorder — draggable floating entry point (feature-flagged)

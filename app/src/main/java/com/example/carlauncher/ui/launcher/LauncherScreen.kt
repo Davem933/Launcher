@@ -1,10 +1,5 @@
 package com.example.carlauncher.ui.launcher
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,35 +20,22 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.carlauncher.BuildConfig
 import com.example.carlauncher.debug.GpsDebugOverlay
-import com.example.carlauncher.ui.dock.DockScaffold
-import com.example.carlauncher.ui.dock.DockViewModel
 import com.example.carlauncher.ui.music.MusicWidget
-import com.example.carlauncher.ui.settings.LauncherSettingsScreen
 import com.example.carlauncher.ui.theme.CarColors
 import com.example.carlauncher.ui.launcher.WeatherCalendarWidget
 
 @Composable
 fun LauncherScreen(
     isDark: Boolean = true,
-    onLaunchSplitScreen: (pkg1: String, pkg2: String) -> Unit = { _, _ -> },
     onMapTouchActiveChanged: (Boolean) -> Unit = {},
-    viewModel: LauncherViewModel = hiltViewModel(),
-    dockViewModel: DockViewModel = hiltViewModel()
+    viewModel: LauncherViewModel = hiltViewModel()
 ) {
     val location       by viewModel.vehicleLocation.collectAsStateWithLifecycle()
     val speedLimit     by viewModel.speedLimit.collectAsStateWithLifecycle()
-    val showAppDrawer  by dockViewModel.showAppDrawer.collectAsStateWithLifecycle()
-    val showSettings   by dockViewModel.showSettings.collectAsStateWithLifecycle()
     var debugOverlayVisible by remember { mutableStateOf(false) }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-
-    DockScaffold(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(CarColors.Bg),
-        onLaunchSplitScreen = onLaunchSplitScreen
-    ) {
+    // The dock lives in MainActivity (outside the pager) so it stays put while pages swipe.
+    Box(modifier = Modifier.fillMaxSize().background(CarColors.Bg)) {
         // ── Main content — fills remaining space (StatusBar removed to give the
         // launcher, and especially the map widget, the extra vertical room) ────
         Box(modifier = Modifier.fillMaxSize()) {
@@ -97,7 +79,6 @@ fun LauncherScreen(
             }
 
         }
-    }
 
     // ── Debug tools — GPS overlay + control panel, DEBUG builds only ──────────
     if (BuildConfig.DEBUG) {
@@ -106,31 +87,6 @@ fun LauncherScreen(
             isVisible = debugOverlayVisible,
             onToggle  = { debugOverlayVisible = !debugOverlayVisible }
         )
-    }
-
-    // ── AppDrawer overlay — fullscreen, shown when Menu tile is tapped ────────
-    AnimatedVisibility(
-        visible = showAppDrawer,
-        enter = fadeIn(tween(200)) + slideInVertically(tween(200)) { it / 8 },
-        exit  = fadeOut(tween(150))
-    ) {
-        AppDrawer(
-            onAppClick = { packageName ->
-                dockViewModel.closeAppDrawer()
-                dockViewModel.launchApp(packageName)
-            },
-            onOpenSettings = { dockViewModel.openSettings() },
-            onDismiss = { dockViewModel.closeAppDrawer() }
-        )
-    }
-
-    // ── Launcher settings overlay — opened from the AppDrawer's first tile ────
-    AnimatedVisibility(
-        visible = showSettings,
-        enter = fadeIn(tween(200)) + slideInVertically(tween(200)) { it / 8 },
-        exit  = fadeOut(tween(150))
-    ) {
-        LauncherSettingsScreen(onDismiss = { dockViewModel.closeSettings() })
     }
 
     } // end outer Box
