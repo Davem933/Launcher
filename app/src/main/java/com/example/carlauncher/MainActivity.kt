@@ -40,6 +40,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
+import com.example.carlauncher.ui.dock.DockViewModel
 import com.example.carlauncher.ui.incident.IncidentFab
 import com.example.carlauncher.ui.incident.IncidentRecorderScreen
 import com.example.carlauncher.ui.launcher.LauncherScreen
@@ -123,6 +124,11 @@ class MainActivity : ComponentActivity() {
                     // hijacked into a page swipe, since Pager has no way to negotiate gesture
                     // ownership with the native MapView's own gesture detector on its own.
                     var mapTouchActive by remember { mutableStateOf(false) }
+                    // Same Activity-scoped instance LauncherScreen/DockBar use — the page dots
+                    // would otherwise show through the fullscreen AppDrawer / Settings overlays.
+                    val dockVm = hiltViewModel<DockViewModel>()
+                    val showAppDrawer by dockVm.showAppDrawer.collectAsStateWithLifecycle()
+                    val showSettings by dockVm.showSettings.collectAsStateWithLifecycle()
 
                     Box(modifier = Modifier.fillMaxSize()) {
                         HorizontalPager(
@@ -147,7 +153,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
 
-                        Row(
+                        if (!showAppDrawer && !showSettings) Row(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .padding(bottom = 100.dp),

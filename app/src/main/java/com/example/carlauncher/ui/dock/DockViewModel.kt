@@ -61,6 +61,16 @@ class DockViewModel @Inject constructor(
     fun openAppDrawer()  { _showAppDrawer.value = true }
     fun closeAppDrawer() { _showAppDrawer.value = false }
 
+    private val _showSettings = MutableStateFlow(false)
+    val showSettings: StateFlow<Boolean> = _showSettings.asStateFlow()
+
+    /** Opened from the AppDrawer tile — replaces the drawer rather than stacking on it. */
+    fun openSettings() {
+        _showAppDrawer.value = false
+        _showSettings.value = true
+    }
+    fun closeSettings() { _showSettings.value = false }
+
     init {
         if (BuildConfig.DEBUG) logNavPackages()
         viewModelScope.launch {

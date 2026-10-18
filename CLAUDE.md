@@ -52,6 +52,7 @@ ui/
   dock/         DockBar, DockViewModel, SlotPicker
   widgets/      WidgetScreen, WidgetViewModel, LongPressWidgetHost, WidgetLayoutTemplate
   theme/        CarLauncherTheme (dark only), CarColors
+  settings/     LauncherSettingsScreen (overlay z AppDrawer dlaždice), PermissionStatus
 data/
   location/     LocationRepository, LocationProcessor, KalmanFilter
   navigation/   NavRepository (Compose singleton object, notifikační navigace)
@@ -266,6 +267,16 @@ Android AppWidget host se dvěma vrstvami:
 `currentPositionMs` na `MediaSessionObserver`: `state.position + (elapsedRealtime - lastPositionUpdateTime) * playbackSpeed`.
 
 **User setup:** Nastavení → Aplikace → Speciální přístup → Přístup k oznámením → CarLauncher → Povolit.
+
+## Module: Nastavení launcheru (ui/settings/)
+
+První dlaždice v `AppDrawer` („Nastavení“, `CarColors.Accent`) — mimo `filtered` seznam, takže ji vyhledávání neschová. Otevře `LauncherSettingsScreen` jako fullscreen overlay v `LauncherScreen`; viditelnost drží `DockViewModel.showSettings` (`openSettings()` zároveň zavře drawer).
+
+**Oprávnění** — `PermissionStatus.kt` (čisté funkce, bez Compose): přístup k oznámením, poloha, kalendář, kamera (jen při `INCIDENT_RECORDER_ENABLED`), výchozí launcher (`RoleManager.ROLE_HOME`). Klik vždy otevírá systémové nastavení, ne runtime dialog (ten po dvojím zamítnutí mlčí); `ActivityNotFoundException` → fallback na detail aplikace. Stav se přepočítá na `ON_RESUME` lifecycle **Activity**.
+
+**O aplikaci** — `VERSION_NAME`, `VERSION_CODE`, `BUILD_TYPE`.
+
+Nic se zatím neukládá — DataStore `launcher_prefs` vznikne až s první sekcí, která něco persistuje.
 
 ## GPS Pipeline
 
