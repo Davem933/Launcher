@@ -276,7 +276,7 @@ První dlaždice v `AppDrawer` („Nastavení“, `CarColors.Accent`) — mimo `
 
 **O aplikaci** — `VERSION_NAME`, `VERSION_CODE`, `BUILD_TYPE`.
 
-**Vzhled → Dock** — řádek „Dock“ otevře dialog s volbou `DockPosition.BOTTOM` (dole, vodorovně) / `LEFT` (vlevo, svisle). Ukládá se do DataStore `launcher_prefs` (`data/settings/LauncherPrefsExt.kt`, klíč `dock_position`) přes `DockViewModel.setPosition()`; `DockViewModel.position` se při startu čte synchronně (`runBlocking`), aby se LEFT dock při cold startu neukázal na vteřinu dole. Rozložení stránek řeší `DockScaffold` (ui/dock/) — obalují ho `LauncherScreen`, `WidgetScreen` i `TripScreen`, takže nová stránka s dockem musí použít ten, ne `DockBar` přímo. Svislý dock je 88dp široký, sloty 52dp (56dp s paddingem) aby se 8 slotů + menu + stavový panel vešlo do ~686dp; tečky stránkování v `MainActivity` se při LEFT přesunou ke spodní hraně vedle docku.
+**Vzhled → Dock** — řádek „Dock“ otevře dialog s volbou `DockPosition.BOTTOM` (dole, vodorovně) / `LEFT` (vlevo, svisle). Ukládá se do DataStore `launcher_prefs` (`data/settings/LauncherPrefsExt.kt`, klíč `dock_position`) přes `DockViewModel.setPosition()`; `DockViewModel.position` se při startu čte synchronně (`runBlocking`), aby se LEFT dock při cold startu neukázal na vteřinu dole. Rozvržení řeší `DockScaffold` (ui/dock/) — obaluje `HorizontalPager` v `MainActivity`, takže dock je **mimo pager** a při swipe mezi stránkami stojí na místě (`LauncherScreen`/`WidgetScreen`/`TripScreen` dock nekreslí). AppDrawer a Nastavení jsou fullscreen overlaye taky v `MainActivity`, nad pagerem i dockem. Svislý dock je 88dp široký, sloty 52dp (56dp s paddingem) aby se 8 slotů + menu + stavový panel vešlo do ~686dp.
 
 ## GPS Pipeline
 
