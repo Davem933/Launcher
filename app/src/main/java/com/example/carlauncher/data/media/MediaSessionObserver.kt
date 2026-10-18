@@ -2,6 +2,8 @@ package com.example.carlauncher.data.media
 
 import android.content.ComponentName
 import android.content.Context
+import android.view.KeyEvent
+import android.media.AudioManager
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
@@ -192,8 +194,16 @@ class MediaSessionObserver @Inject constructor(
         }
     }
 
-    fun play()         { activeController?.transportControls?.play() }
-    fun pause()        { activeController?.transportControls?.pause() }
-    fun skipNext()     { activeController?.transportControls?.skipToNext() }
-    fun skipPrevious() { activeController?.transportControls?.skipToPrevious() }
+    // With no bound session the widget still shows its controls — route the press through
+    // the system media-button path so it reaches whichever player was last active.
+    fun play()         { activeController?.transportControls?.play()           ?: sendMediaKey(KeyEvent.KEYCODE_MEDIA_PLAY) }
+    fun pause()        { activeController?.transportControls?.pause()          ?: sendMediaKey(KeyEvent.KEYCODE_MEDIA_PAUSE) }
+    fun skipNext()     { activeController?.transportControls?.skipToNext()     ?: sendMediaKey(KeyEvent.KEYCODE_MEDIA_NEXT) }
+    fun skipPrevious() { activeController?.transportControls?.skipToPrevious() ?: sendMediaKey(KeyEvent.KEYCODE_MEDIA_PREVIOUS) }
+
+    private fun sendMediaKey(keyCode: Int) {
+        val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
+        audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
+    }
 }

@@ -38,6 +38,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -173,10 +174,12 @@ fun MusicWidget(
             Spacer(modifier = Modifier.height(12.dp))
         }
 
-        // ── 5. Controls — centered, compact ───────────────────────────────────
-        if (info != null) {
+        // ── 5. Controls — centered, compact. Always shown; dimmed while no session is
+        // bound (presses then fall back to the system media-button path) ───────
+        run {
+            val playing = info?.isPlaying == true
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().alpha(if (info != null) 1f else 0.45f),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -198,13 +201,13 @@ fun MusicWidget(
                         .clip(CircleShape)
                         .background(Brush.verticalGradient(listOf(CarColors.Go, CarColors.GoStrong)))
                         .clickable {
-                            if (info.isPlaying) viewModel.pause() else viewModel.play()
+                            if (playing) viewModel.pause() else viewModel.play()
                         },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = if (info.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (info.isPlaying) "Pozastavit" else "Přehrát",
+                        imageVector = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                        contentDescription = if (playing) "Pozastavit" else "Přehrát",
                         tint = Color(0xFF06281B),
                         modifier = Modifier.size(30.dp)
                     )
