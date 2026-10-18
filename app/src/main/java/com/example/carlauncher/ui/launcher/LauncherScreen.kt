@@ -25,7 +25,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.carlauncher.BuildConfig
 import com.example.carlauncher.debug.GpsDebugOverlay
-import com.example.carlauncher.ui.dock.DockBar
+import com.example.carlauncher.ui.dock.DockScaffold
 import com.example.carlauncher.ui.dock.DockViewModel
 import com.example.carlauncher.ui.music.MusicWidget
 import com.example.carlauncher.ui.settings.LauncherSettingsScreen
@@ -48,18 +48,15 @@ fun LauncherScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
 
-    Column(
+    DockScaffold(
         modifier = Modifier
             .fillMaxSize()
-            .background(CarColors.Bg)
+            .background(CarColors.Bg),
+        onLaunchSplitScreen = onLaunchSplitScreen
     ) {
         // ── Main content — fills remaining space (StatusBar removed to give the
         // launcher, and especially the map widget, the extra vertical room) ────
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-        ) {
+        Box(modifier = Modifier.fillMaxSize()) {
             Row(
                 modifier = Modifier
                     .fillMaxSize()
@@ -100,15 +97,6 @@ fun LauncherScreen(
             }
 
         }
-
-        // ── DockBar — fixed 88dp, padded off the screen edge ─────────────────
-        DockBar(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp)
-                .padding(bottom = 8.dp),
-            onLaunchSplitScreen = onLaunchSplitScreen
-        )
     }
 
     // ── Debug tools — GPS overlay + control panel, DEBUG builds only ──────────

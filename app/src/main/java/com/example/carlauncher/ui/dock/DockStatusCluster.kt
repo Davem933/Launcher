@@ -49,6 +49,7 @@ private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 @Composable
 fun DockStatusCluster(
     modifier: Modifier = Modifier,
+    vertical: Boolean = false,
     weatherViewModel: WeatherCalendarViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
@@ -65,9 +66,48 @@ fun DockStatusCluster(
         }
     }
 
+    val batteryItem: @Composable () -> Unit = {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Icon(
+                imageVector = batteryIcon(batteryPct),
+                contentDescription = null,
+                tint = CarColors.Text2,
+                modifier = Modifier.size(16.dp),
+            )
+            Text(
+                text = "$batteryPct %",
+                color = CarColors.Text2,
+                fontSize = 13.sp,
+            )
+        }
+    }
+
+    val weatherItem: @Composable () -> Unit = {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Icon(
+                imageVector = wmoIcon(weather?.code),
+                contentDescription = null,
+                tint = wmoIconColor(weather?.code),
+                modifier = Modifier.size(16.dp),
+            )
+            Text(
+                text = weather?.let { "${it.tempC}°" } ?: "...",
+                color = CarColors.Text2,
+                fontSize = 13.sp,
+            )
+        }
+    }
+
     Column(
         modifier = modifier,
-        horizontalAlignment = Alignment.End,
+        // Horizontal dock hugs the right edge; the narrow vertical dock centers it.
+        horizontalAlignment = if (vertical) Alignment.CenterHorizontally else Alignment.End,
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Text(
@@ -77,42 +117,16 @@ fun DockStatusCluster(
             fontWeight = FontWeight.SemiBold,
         )
 
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
+        if (vertical) {
+            batteryItem()
+            weatherItem()
+        } else {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Icon(
-                    imageVector = batteryIcon(batteryPct),
-                    contentDescription = null,
-                    tint = CarColors.Text2,
-                    modifier = Modifier.size(16.dp),
-                )
-                Text(
-                    text = "$batteryPct %",
-                    color = CarColors.Text2,
-                    fontSize = 13.sp,
-                )
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Icon(
-                    imageVector = wmoIcon(weather?.code),
-                    contentDescription = null,
-                    tint = wmoIconColor(weather?.code),
-                    modifier = Modifier.size(16.dp),
-                )
-                Text(
-                    text = weather?.let { "${it.tempC}°" } ?: "...",
-                    color = CarColors.Text2,
-                    fontSize = 13.sp,
-                )
+                batteryItem()
+                weatherItem()
             }
         }
     }

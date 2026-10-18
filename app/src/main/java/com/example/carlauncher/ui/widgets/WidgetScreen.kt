@@ -56,7 +56,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.carlauncher.ui.dock.DockBar
+import com.example.carlauncher.ui.dock.DockScaffold
 import com.example.carlauncher.ui.theme.CarColors
 
 @Composable
@@ -85,11 +85,13 @@ fun WidgetScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    Column(
+    DockScaffold(
         modifier = Modifier
             .fillMaxSize()
-            .background(CarColors.Bg)
+            .background(CarColors.Bg),
+        onLaunchSplitScreen = onLaunchSplitScreen
     ) {
+      Column(modifier = Modifier.fillMaxSize()) {
         // ── Template picker button ────────────────────────────────────────────
         Row(
             modifier = Modifier
@@ -242,14 +244,7 @@ fun WidgetScreen(
                 }
             }
         }
-
-        DockBar(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp)
-                .padding(bottom = 8.dp),
-            onLaunchSplitScreen = onLaunchSplitScreen
-        )
+      }
     }
 
     if (showTemplatePicker) {

@@ -24,6 +24,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ViewAgenda
+import androidx.compose.material.icons.filled.ViewSidebar
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Notifications
@@ -31,6 +33,7 @@ import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -47,15 +50,25 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.example.carlauncher.BuildConfig
+import com.example.carlauncher.data.model.DockPosition
+import com.example.carlauncher.ui.dock.DockViewModel
 import com.example.carlauncher.ui.theme.CarColors
 
 @Composable
-fun LauncherSettingsScreen(onDismiss: () -> Unit) {
+fun LauncherSettingsScreen(
+    onDismiss: () -> Unit,
+    dockViewModel: DockViewModel = hiltViewModel()
+) {
     val context = LocalContext.current
     var permissions by remember { mutableStateOf(permissionItems(context)) }
+    val dockPosition by dockViewModel.position.collectAsStateWithLifecycle()
+    var showDockPicker by remember { mutableStateOf(false) }
 
     // Re-check on return from system settings. Activity lifecycle, not LocalLifecycleOwner —
     // the latter is per-page from HorizontalPager and need not reach RESUMED.
@@ -69,6 +82,14 @@ fun LauncherSettingsScreen(onDismiss: () -> Unit) {
     }
 
     BackHandler(onBack = onDismiss)
+
+    if (showDockPicker) {
+        DockPositionDialog(
+            current = dockPosition,
+            onSelect = { dockViewModel.setPosition(it); showDockPicker = false },
+            onDismiss = { showDockPicker = false }
+        )
+    }
 
     Box(
         modifier = Modifier
@@ -101,6 +122,16 @@ fun LauncherSettingsScreen(onDismiss: () -> Unit) {
                 contentPadding = PaddingValues(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                item { SectionHeader("Vzhled") }
+                item {
+                    ValueRow(
+                        icon = Icons.Default.ViewAgenda,
+                        title = "Dock",
+                        value = dockPosition.label(),
+                        onClick = { showDockPicker = true }
+                    )
+                }
+                item { Spacer(Modifier.height(16.dp)) }
                 item { SectionHeader("Oprávnění") }
                 items(permissions, key = { it.id }) { item ->
                     PermissionRow(
@@ -116,6 +147,94 @@ fun LauncherSettingsScreen(onDismiss: () -> Unit) {
             }
         }
     }
+}
+
+@Composable
+private fun DockPositionDialog(
+    current: DockPosition,
+    onSelect: (DockPosition) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(shape = RoundedCornerShape(24.dp), color = CarColors.Surface) {
+            Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Poloha doku",
+                    style = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = CarColors.Text),
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                DockPosition.entries.forEach { option ->
+                    val selected = option == current
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 64.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (selected) CarColors.Accent.copy(alpha = 0.18f) else CarColors.Surface2)
+                            .clickable { onSelect(option) }
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            option.icon(), contentDescription = null,
+                            tint = if (selected) CarColors.Accent else CarColors.Text2,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(Modifier.width(16.dp))
+                        Text(
+                            option.label(),
+                            style = TextStyle(
+                                fontSize = 16.sp,
+                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                                color = if (selected) CarColors.Accent else CarColors.Text
+                            ),
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (selected) {
+                            Icon(
+                                Icons.Default.CheckCircle, contentDescription = "Vybráno",
+                                tint = CarColors.Accent, modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ValueRow(icon: ImageVector, title: String, value: String, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(14.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 64.dp)
+            .clip(shape)
+            .background(CarColors.Surface, shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = null, tint = CarColors.Text2, modifier = Modifier.size(24.dp))
+        Spacer(Modifier.width(16.dp))
+        Text(
+            title,
+            style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Medium, color = CarColors.Text),
+            modifier = Modifier.weight(1f)
+        )
+        Text(value, style = TextStyle(fontSize = 15.sp, color = CarColors.Text2))
+    }
+}
+
+private fun DockPosition.label(): String = when (this) {
+    DockPosition.BOTTOM -> "Dole (vodorovně)"
+    DockPosition.LEFT   -> "Vlevo (svisle)"
+}
+
+private fun DockPosition.icon(): ImageVector = when (this) {
+    DockPosition.BOTTOM -> Icons.Default.ViewAgenda
+    DockPosition.LEFT   -> Icons.Default.ViewSidebar
 }
 
 @Composable

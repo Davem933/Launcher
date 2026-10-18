@@ -14,7 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.example.carlauncher.ui.dock.DockBar
+import com.example.carlauncher.ui.dock.DockScaffold
 import com.example.carlauncher.ui.notes.VoiceNotesScreen
 import com.example.carlauncher.ui.notes.VoiceNotesWidget
 import com.example.carlauncher.ui.theme.CarColors
@@ -36,15 +36,15 @@ fun TripScreen(
         return
     }
 
-    Column(
+    DockScaffold(
         modifier = Modifier
             .fillMaxSize()
-            .background(CarColors.Bg)
+            .background(CarColors.Bg),
+        onLaunchSplitScreen = onLaunchSplitScreen
     ) {
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
+                .fillMaxSize()
                 .padding(horizontal = 12.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -61,13 +61,5 @@ fun TripScreen(
                 onOpenHistory = { showHistory = true }
             )
         }
-
-        DockBar(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp)
-                .padding(bottom = 8.dp),
-            onLaunchSplitScreen = onLaunchSplitScreen
-        )
     }
 }

@@ -40,6 +40,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
+import com.example.carlauncher.data.model.DockPosition
 import com.example.carlauncher.ui.dock.DockViewModel
 import com.example.carlauncher.ui.incident.IncidentFab
 import com.example.carlauncher.ui.incident.IncidentRecorderScreen
@@ -153,10 +154,17 @@ class MainActivity : ComponentActivity() {
                             }
                         }
 
+                        val dockPosition by dockVm.position.collectAsStateWithLifecycle()
                         if (!showAppDrawer && !showSettings) Row(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
-                                .padding(bottom = 100.dp),
+                                // Bottom dock: dots sit above it. Left dock: bottom edge is free,
+                                // so shift the center past the 100dp-wide dock column instead.
+                                .then(
+                                    if (dockPosition == DockPosition.LEFT)
+                                        Modifier.padding(start = 100.dp, bottom = 12.dp)
+                                    else Modifier.padding(bottom = 100.dp)
+                                ),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             repeat(3) { i ->

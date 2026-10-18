@@ -13,6 +13,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -43,10 +44,12 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationException
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.withTimeout
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.carlauncher.data.model.DockPosition
 import com.example.carlauncher.data.model.DockSlot
 import com.example.carlauncher.ui.theme.CarColors
 
@@ -56,6 +59,7 @@ private val SlotBorder    = Color(0xFF2A2A38)
 private val SlotShape     = CircleShape
 private val MenuSize      = 48.dp
 private val SlotSize      = 60.dp
+private val SlotSizeCompact = 52.dp   // vertical dock — 56dp touch target incl. padding
 
 @Composable
 fun DockBar(
@@ -64,63 +68,92 @@ fun DockBar(
     viewModel: DockViewModel = hiltViewModel()
 ) {
     val slots by viewModel.slots.collectAsStateWithLifecycle()
+    val position by viewModel.position.collectAsStateWithLifecycle()
     var editMode   by remember { mutableStateOf(false) }
     var pickerSlot by remember { mutableIntStateOf(-1) }
 
+    val vertical = position == DockPosition.LEFT
+    // 8 slots + menu + status have to fit the ~686dp screen height in the vertical dock.
+    val slotSize = if (vertical) SlotSizeCompact else SlotSize
+
+    val slotTiles: @Composable () -> Unit = {
+        slots.forEachIndexed { index, slot ->
+            // The 2 split-screen slots (navigation + YouTube Music) are permanently
+            // fixed — no long-press edit, no picker, not affected by another slot's
+            // edit mode. Every other slot stays freely user-configurable as before.
+            val locked = slot is DockSlot.SplitScreen
+            DockSlotTile(
+                slot        = slot,
+                slotSize    = slotSize,
+                editMode    = editMode && !locked,
+                onClick     = {
+                    when {
+                        slot is DockSlot.SplitScreen -> onLaunchSplitScreen(
+                            slot.packageName1, slot.packageName2)
+                        editMode                     -> pickerSlot = index
+                        slot is DockSlot.App         -> viewModel.launchApp(slot.packageName)
+                        slot == DockSlot.Empty       -> { pickerSlot = index; editMode = true }
+                        slot == DockSlot.Navigate    -> viewModel.launchNavigation()
+                    }
+                },
+                onLongClick = {
+                    if (!locked) { editMode = true; pickerSlot = index }
+                }
+            )
+        }
+    }
+
     // No shelf/card background — tiles float directly over whatever is behind the dock,
     // each tile carries its own shadow for legibility instead.
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .size(88.dp)
-    ) {
-        // Menu sits pinned near the left edge, independent of the slot cluster below.
-        MenuTile(
-            onClick = { viewModel.openAppDrawer() },
-            modifier = Modifier
-                .align(Alignment.CenterStart)
-                .padding(start = 20.dp)
-        )
-
-        // Battery / time / weather — pinned near the right edge, mirroring the Menu
-        // tile (Android Auto style status cluster).
-        DockStatusCluster(
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .padding(end = 20.dp)
-        )
-
-        // Configurable app slots — their own compact group, centered in the full dock width.
-        Row(
-            modifier = Modifier
-                .align(Alignment.Center)
-                .padding(horizontal = 20.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+    if (vertical) {
+        Column(
+            modifier = modifier
+                .fillMaxHeight()
+                .width(88.dp)
+                .padding(vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            slots.forEachIndexed { index, slot ->
-                // The 2 split-screen slots (navigation + YouTube Music) are permanently
-                // fixed — no long-press edit, no picker, not affected by another slot's
-                // edit mode. Every other slot stays freely user-configurable as before.
-                val locked = slot is DockSlot.SplitScreen
-                DockSlotTile(
-                    slot        = slot,
-                    editMode    = editMode && !locked,
-                    onClick     = {
-                        when {
-                            slot is DockSlot.SplitScreen -> onLaunchSplitScreen(
-                                slot.packageName1, slot.packageName2)
-                            editMode                     -> pickerSlot = index
-                            slot is DockSlot.App         -> viewModel.launchApp(slot.packageName)
-                            slot == DockSlot.Empty       -> { pickerSlot = index; editMode = true }
-                            slot == DockSlot.Navigate    -> viewModel.launchNavigation()
-                        }
-                    },
-                    onLongClick = {
-                        if (!locked) { editMode = true; pickerSlot = index }
-                    }
-                )
-            }
+            MenuTile(onClick = { viewModel.openAppDrawer() })
+
+            // Slots centered in the space between the menu (top) and status (bottom).
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) { slotTiles() }
+
+            DockStatusCluster(vertical = true)
+        }
+    } else {
+        Box(
+            modifier = modifier
+                .fillMaxWidth()
+                .size(88.dp)
+        ) {
+            // Menu sits pinned near the left edge, independent of the slot cluster below.
+            MenuTile(
+                onClick = { viewModel.openAppDrawer() },
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(start = 20.dp)
+            )
+
+            // Battery / time / weather — pinned near the right edge, mirroring the Menu
+            // tile (Android Auto style status cluster).
+            DockStatusCluster(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 20.dp)
+            )
+
+            // Configurable app slots — their own compact group, centered in the full dock width.
+            Row(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) { slotTiles() }
         }
     }
 
@@ -167,6 +200,7 @@ private fun MenuTile(onClick: () -> Unit, modifier: Modifier = Modifier) {
 @Composable
 private fun DockSlotTile(
     slot: DockSlot,
+    slotSize: Dp,
     editMode: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit
@@ -184,7 +218,7 @@ private fun DockSlotTile(
 
     Box(
         modifier = Modifier
-            .size(SlotSize + 4.dp)
+            .size(slotSize + 4.dp)
             .graphicsLayer { rotationZ = wiggle.value }
             .pointerInput(Unit) {
                 awaitEachGesture {
@@ -209,9 +243,9 @@ private fun DockSlotTile(
         contentAlignment = Alignment.Center
     ) {
         when (slot) {
-            is DockSlot.App         -> AppTile(slot.packageName)
-            is DockSlot.SplitScreen -> SplitTile(slot.packageName1, slot.packageName2)
-            DockSlot.Empty          -> EmptyTile()
+            is DockSlot.App         -> AppTile(slot.packageName, slotSize)
+            is DockSlot.SplitScreen -> SplitTile(slot.packageName1, slot.packageName2, slotSize)
+            DockSlot.Empty          -> EmptyTile(slotSize)
             DockSlot.Navigate       -> { /* Navigovat is in MapWidget overlay, not in dock */ }
         }
     }
@@ -220,25 +254,25 @@ private fun DockSlotTile(
 // ── Tile variants ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun AppTile(packageName: String) {
+private fun AppTile(packageName: String, size: Dp) {
     val icon = rememberAppIcon(packageName)
     AppIcon(
         drawable = icon,
         modifier = Modifier
-            .size(SlotSize)
+            .size(size)
             .shadow(6.dp, SlotShape, clip = false)
             .clip(SlotShape)
     )
 }
 
 @Composable
-private fun SplitTile(pkg1: String, pkg2: String) {
+private fun SplitTile(pkg1: String, pkg2: String, size: Dp) {
     val icon1 = rememberAppIcon(pkg1)
     val icon2 = rememberAppIcon(pkg2)
 
     Box(
         modifier = Modifier
-            .size(SlotSize)
+            .size(size)
             .shadow(6.dp, SlotShape, clip = false)
             .clip(SlotShape)
             .background(SlotBg)
@@ -267,10 +301,10 @@ private fun SplitTile(pkg1: String, pkg2: String) {
 }
 
 @Composable
-private fun EmptyTile() {
+private fun EmptyTile(size: Dp) {
     Box(
         modifier = Modifier
-            .size(SlotSize)
+            .size(size)
             .background(SlotBg.copy(alpha = 0.6f), SlotShape)
             .border(1.dp, SlotBorder, SlotShape),
         contentAlignment = Alignment.Center

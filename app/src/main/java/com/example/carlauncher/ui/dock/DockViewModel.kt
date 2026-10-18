@@ -11,18 +11,23 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.carlauncher.BuildConfig
 import com.example.carlauncher.data.dock.dockDataStore
+import com.example.carlauncher.data.model.DockPosition
 import com.example.carlauncher.data.model.DockSlot
+import com.example.carlauncher.data.settings.launcherDataStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 private val DOCK_KEY = stringPreferencesKey("dock_slots_v2")
+private val POSITION_KEY = stringPreferencesKey("dock_position")
 
 // 8 configurable slots (Navigate is fixed 9th, not stored)
 // Split screen rule: packageName1 = nav (left), packageName2 = music (right)
@@ -71,7 +76,25 @@ class DockViewModel @Inject constructor(
     }
     fun closeSettings() { _showSettings.value = false }
 
+    // Read once synchronously so a LEFT dock doesn't flash as BOTTOM (and re-lay-out the
+    // whole screen) on every cold start; later changes arrive through the flow below.
+    private val _position = MutableStateFlow(
+        runBlocking { DockPosition.fromName(context.launcherDataStore.data.first()[POSITION_KEY]) }
+    )
+    val position: StateFlow<DockPosition> = _position.asStateFlow()
+
+    fun setPosition(position: DockPosition) {
+        viewModelScope.launch {
+            context.launcherDataStore.edit { it[POSITION_KEY] = position.name }
+        }
+    }
+
     init {
+        viewModelScope.launch {
+            context.launcherDataStore.data.collect { prefs ->
+                _position.value = DockPosition.fromName(prefs[POSITION_KEY])
+            }
+        }
         if (BuildConfig.DEBUG) logNavPackages()
         viewModelScope.launch {
             context.dockDataStore.data.collect { prefs ->
