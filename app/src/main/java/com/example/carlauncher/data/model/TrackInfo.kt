@@ -8,5 +8,7 @@ data class TrackInfo(
     val albumArt: Bitmap?,
     val isPlaying: Boolean,
     val duration: Long,   // ms, 0 if unavailable
-    val position: Long    // ms at last state update
+    val position: Long,   // ms at last state update
+    val packageName: String = "",
+    val appName: String = ""
 )

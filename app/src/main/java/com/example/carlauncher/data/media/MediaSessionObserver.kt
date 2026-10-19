@@ -29,6 +29,15 @@ import javax.inject.Singleton
 
 private const val TAG = "MediaDebug"
 
+// Navigation apps that expose a media session but are not music players
+private val NAV_PACKAGES = setOf(
+    "com.google.android.apps.maps",
+    "cz.seznam.mapy",
+    "com.waze",
+    "com.sygic.aura",
+    "com.here.app.maps"
+)
+
 @Singleton
 class MediaSessionObserver @Inject constructor(
     @ApplicationContext private val context: Context
@@ -62,20 +71,23 @@ class MediaSessionObserver @Inject constructor(
             bindToFirst(controllers)
         }
 
+    // Every non-navigation session gets the callback, so a session that starts playing
+    // can take over from a paused one.
+    private var observed: List<MediaController> = emptyList()
+    private var lastPackage: String? = null
+
     private val controllerCallback = object : MediaController.Callback() {
         override fun onMetadataChanged(metadata: MediaMetadata?) {
             Log.d(TAG, "onMetadataChanged: ${metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)}")
-            refreshTrackInfo()
+            selectActive()
         }
         override fun onPlaybackStateChanged(state: PlaybackState?) {
             Log.d(TAG, "onPlaybackStateChanged: state=${state?.state}")
-            refreshTrackInfo()
+            selectActive()
         }
         override fun onSessionDestroyed() {
             Log.d(TAG, "Session destroyed")
-            activeController?.unregisterCallback(this)
-            activeController = null
-            _currentTrack.value = null
+            selectActive()
         }
     }
 
@@ -98,7 +110,7 @@ class MediaSessionObserver @Inject constructor(
                     try {
                         sessionManager.removeOnActiveSessionsChangedListener(sessionChangedListener)
                     } catch (_: Exception) {}
-                    activeController?.unregisterCallback(controllerCallback)
+                    unregisterObserved()
                     activeController = null
                     _currentTrack.value = null
                 }
@@ -113,9 +125,14 @@ class MediaSessionObserver @Inject constructor(
         connectionJob = null
         try { sessionManager.removeOnActiveSessionsChangedListener(sessionChangedListener) }
         catch (_: Exception) {}
-        activeController?.unregisterCallback(controllerCallback)
+        unregisterObserved()
         activeController = null
         _currentTrack.value = null
+    }
+
+    private fun unregisterObserved() {
+        observed.forEach { it.unregisterCallback(controllerCallback) }
+        observed = emptyList()
     }
 
     private fun querySessions() {
@@ -141,13 +158,36 @@ class MediaSessionObserver @Inject constructor(
     }
 
     private fun bindToFirst(controllers: List<MediaController>?) {
-        activeController?.unregisterCallback(controllerCallback)
-        activeController = controllers?.firstOrNull()?.also { ctrl ->
-            Log.d(TAG, "Binding to: ${ctrl.packageName}")
-            ctrl.registerCallback(controllerCallback, mainHandler)
+        unregisterObserved()
+        observed = controllers.orEmpty().filter { it.packageName !in NAV_PACKAGES }
+        observed.forEach { it.registerCallback(controllerCallback, mainHandler) }
+        selectActive()
+    }
+
+    // Prefer a playing session, then the one we already follow, then the first in the list.
+    private fun selectActive() {
+        val chosen = observed.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING }
+            ?: observed.firstOrNull { it.packageName == activeController?.packageName }
+            ?: observed.firstOrNull()
+        if (chosen?.packageName != activeController?.packageName) {
+            Log.d(TAG, "Binding to: ${chosen?.packageName}")
         }
-        if (activeController == null) Log.d(TAG, "No active controller to bind")
+        activeController = chosen
+        chosen?.packageName?.let { lastPackage = it }
         refreshTrackInfo()
+    }
+
+    private fun appLabel(pkg: String): String = try {
+        val pm = context.packageManager
+        pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
+    } catch (_: Exception) { "" }
+
+    /** Opens the player that is (or was last) active; false if none is known/launchable. */
+    fun launchPlayer(): Boolean {
+        val pkg = activeController?.packageName ?: lastPackage ?: return false
+        val intent = context.packageManager.getLaunchIntentForPackage(pkg) ?: return false
+        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        return try { context.startActivity(intent); true } catch (_: Exception) { false }
     }
 
     private fun refreshTrackInfo() {
@@ -189,7 +229,9 @@ class MediaSessionObserver @Inject constructor(
                 albumArt  = art,
                 isPlaying = isPlaying,
                 duration  = duration,
-                position  = position
+                position  = position,
+                packageName = ctrl.packageName,
+                appName   = appLabel(ctrl.packageName)
             )
         }
     }

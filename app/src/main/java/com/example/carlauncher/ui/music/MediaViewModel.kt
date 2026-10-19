@@ -38,4 +38,5 @@ class MediaViewModel @Inject constructor(
     fun pause()        = mediaObserver.pause()
     fun skipNext()     = mediaObserver.skipNext()
     fun skipPrevious() = mediaObserver.skipPrevious()
+    fun launchPlayer() = mediaObserver.launchPlayer()
 }

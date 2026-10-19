@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -81,16 +80,17 @@ fun MusicWidget(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.clickable { viewModel.launchPlayer() }
             ) {
                 Icon(
-                    imageVector = Icons.Default.Bluetooth,
+                    imageVector = Icons.Default.MusicNote,
                     contentDescription = null,
                     tint = CarColors.Accent,
                     modifier = Modifier.size(14.dp)
                 )
                 Text(
-                    text = "YouTube Music",
+                    text = info?.appName?.takeIf { it.isNotEmpty() } ?: "Hudba",
                     style = TextStyle(
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
@@ -110,7 +110,8 @@ fun MusicWidget(
                 .fillMaxWidth()
                 .weight(1f)
                 .clip(ArtShape)
-                .background(CarColors.Surface2),
+                .background(CarColors.Surface2)
+                .clickable { viewModel.launchPlayer() },
             contentAlignment = Alignment.Center
         ) {
             val art = info?.albumArt
