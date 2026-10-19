@@ -3,6 +3,7 @@ package com.example.carlauncher.ui.launcher
 import android.content.Intent
 import android.content.pm.ResolveInfo
 import android.graphics.Bitmap
+import android.graphics.drawable.Drawable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -31,6 +32,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -48,7 +51,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.carlauncher.data.model.DockItem
 import com.example.carlauncher.ui.theme.CarColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -60,7 +62,7 @@ fun AppDrawer(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    var allApps by remember { mutableStateOf<List<DockItem>>(emptyList()) }
+    var allApps by remember { mutableStateOf<List<DrawerApp>>(emptyList()) }
     var search  by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
@@ -70,13 +72,17 @@ fun AppDrawer(
                 addCategory(Intent.CATEGORY_LAUNCHER)
             }
             pm.queryIntentActivities(intent, 0)
-                .sortedBy { it.loadLabel(pm).toString().lowercase() }
-                .distinctBy { it.activityInfo.packageName }
-                .map { ri: ResolveInfo ->
-                    DockItem(
+                .map { ri: ResolveInfo -> ri to ri.loadLabel(pm).toString() }
+                .sortedBy { (_, label) -> label.lowercase() }
+                .distinctBy { (ri, _) -> ri.activityInfo.packageName }
+                .map { (ri, label) ->
+                    DrawerApp(
                         packageName = ri.activityInfo.packageName,
-                        displayName = ri.loadLabel(pm).toString(),
-                        icon        = ri.loadIcon(pm)
+                        displayName = label,
+                        // Rasterised here, off the main thread: doing it in each grid item's
+                        // first composition (~2 ms × every visible item, all in one frame)
+                        // made the frame that shows the grid ~140 ms long.
+                        icon        = ri.loadIcon(pm).toIconBitmap()
                     )
                 }
         }
@@ -181,8 +187,25 @@ fun AppDrawer(
     }
 }
 
+/** A launchable app with its icon already rasterised, ready to draw without main-thread work. */
+@Immutable
+private class DrawerApp(
+    val packageName: String,
+    val displayName: String,
+    val icon: ImageBitmap?
+)
+
+private const val ICON_PX = 96
+
+private fun Drawable.toIconBitmap(): ImageBitmap {
+    val bm = Bitmap.createBitmap(ICON_PX, ICON_PX, Bitmap.Config.ARGB_8888)
+    setBounds(0, 0, ICON_PX, ICON_PX)
+    draw(android.graphics.Canvas(bm))
+    return bm.asImageBitmap()
+}
+
 @Composable
-private fun DrawerAppItem(app: DockItem, onClick: () -> Unit) {
+private fun DrawerAppItem(app: DrawerApp, onClick: () -> Unit) {
     val shape = RoundedCornerShape(14.dp)
     Column(
         modifier = Modifier
@@ -193,16 +216,8 @@ private fun DrawerAppItem(app: DockItem, onClick: () -> Unit) {
     ) {
         val icon = app.icon
         if (icon != null) {
-            val bmp = remember(icon) {
-                val size = 96
-                val bm = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-                val canvas = android.graphics.Canvas(bm)
-                icon.setBounds(0, 0, size, size)
-                icon.draw(canvas)
-                bm.asImageBitmap()
-            }
             Image(
-                bitmap = bmp,
+                bitmap = icon,
                 contentDescription = app.displayName,
                 modifier = Modifier.size(52.dp).clip(shape)
             )

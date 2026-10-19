@@ -18,6 +18,9 @@ import org.junit.runner.RunWith
  * - `Partial(Disable, warmup)` = the app after a few runs, once ART has JIT-profiled the hot code
  *   paths — the steady state on the tablet. The gap between the two is roughly what a Baseline
  *   Profile could win back.
+ * - `Partial()` = only the shipped Baseline Profile compiled (BaselineProfileMode.Require, no
+ *   warm-up) — what the user gets right after install since phase 2. Fails if the APK has no
+ *   profile, so a lost baseline-prof.txt can't silently go unnoticed.
  */
 @RunWith(AndroidJUnit4::class)
 class StartupBenchmark {
@@ -27,6 +30,12 @@ class StartupBenchmark {
 
     @Test
     fun coldStartNoCompilation() = startup(StartupMode.COLD, CompilationMode.None())
+
+    @Test
+    fun coldStartBaselineProfile() = startup(StartupMode.COLD, CompilationMode.Partial())
+
+    @Test
+    fun warmStartBaselineProfile() = startup(StartupMode.WARM, CompilationMode.Partial())
 
     @Test
     fun coldStartWarmedUp() = startup(StartupMode.COLD, warmedUp())

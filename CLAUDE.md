@@ -88,7 +88,7 @@ service/
 - **Page 1** — `WidgetScreen` (Android AppWidget grid)
 - **Page 2** — `TripScreen` (Trip Computer + Jízdní deník)
 
-Přechod swipe doleva/doprava. `beyondViewportPageCount = 1` → všechny stránky jsou preloadnuté.
+Přechod swipe doleva/doprava. `beyondViewportPageCount` je při startu `1` (stránky 0+1) a po 2 s se přepne na `2` → pak jsou všechny tři stránky pořád zkomponované. S trvalou `1` se na stránce Trip zahodila stránka s mapou a při návratu se celá stavěla znovu (špičky ~40 ms při swipe); trvalá `2` zase prodloužila studený start, viz `docs/perf/`.
 
 **Konflikt swipe mapy vs. swipe stránek** — viz Module: MapNavPanel níže (`trackTouchActive`) pro fix, kdy `HorizontalPager` kradl vodorovné tahy na mapě.
 

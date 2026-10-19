@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt)
+    alias(libs.plugins.baselineprofile)
     kotlin("kapt")
 }
 
@@ -47,7 +48,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -86,8 +88,41 @@ android {
     }
 }
 
+// Baseline Profile (fáze 2 výkonu): generuje :macrobenchmark (BaselineProfileGenerator) na
+// připojeném tabletu přes `./gradlew :app:generateBaselineProfile`; výsledek se commituje do
+// src/main/generated/baselineProfiles/ a profileinstaller ho při instalaci předá ART.
+baselineProfile {
+    // Jen ručně — generování potřebuje tablet a trvá minuty, nesmí běžet při každém buildu.
+    automaticGenerationDuringBuild = false
+    saveInSrc = true
+    // Do main, ať profil dostanou všechny varianty včetně "benchmark".
+    mergeIntoMain = true
+}
+// Plugin-created variant the profile is generated from (release without R8). Same id + debug
+// signing as "benchmark": installs next to the debug build on the tablet instead of replacing
+// it, and isn't the default HOME (which the system would relaunch after every process kill).
+// (The plugin copies release's applicationIdSuffix over the DSL, hence the Variant API for the id.)
+android.buildTypes.matching { it.name == "nonMinifiedRelease" }.configureEach {
+    signingConfig = android.signingConfigs.getByName("debug")
+}
+androidComponents.onVariants(androidComponents.selector().withBuildType("nonMinifiedRelease")) {
+    it.applicationId.set("com.example.carlauncher.benchmark")
+}
+// The plugin copies release's source dirs as strings into its build types; kapt registers its
+// generated dir as a Provider, which turns into a literal "provider(?)" path and breaks
+// kaptGenerateStubsNonMinifiedReleaseKotlin on Gradle 9 ("Could not stat file …/provider(?)").
+// Runs after the plugin's own finalizeDsl (registered first by the plugins block).
+androidComponents.finalizeDsl { ext ->
+    ext.sourceSets.matching { it.name == "nonMinifiedRelease" || it.name == "benchmarkRelease" }
+        .configureEach {
+            listOf(java, kotlin).forEach { dirs -> dirs.directories.removeIf { "provider(" in it } }
+        }
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.profileinstaller)
+    baselineProfile(project(":macrobenchmark"))
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.activity.compose)

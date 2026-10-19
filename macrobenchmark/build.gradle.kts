@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.android.test)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.baselineprofile)
 }
 
 // Performance tests (startup + frame timing) for :app, run on a real device:
@@ -38,15 +39,23 @@ android {
     experimentalProperties["android.experimental.self-instrumenting"] = true
 }
 
+// Baseline Profile producer: `./gradlew :app:generateBaselineProfile` runs
+// BaselineProfileGenerator on the connected tablet (no Gradle-managed emulator).
+baselineProfile {
+    useConnectedDevices = true
+}
+
 dependencies {
     implementation(libs.androidx.test.ext.junit)
     implementation(libs.androidx.uiautomator)
     implementation(libs.androidx.benchmark.macro.junit4)
 }
 
-// Only the benchmark variant makes sense — measuring debug would be meaningless.
+// Only release-like variants make sense — measuring debug would be meaningless.
+// "benchmark" = our measurements, "nonMinifiedRelease" = Baseline Profile generation
+// (created by the baselineprofile plugin; profiles must come from un-obfuscated code).
 androidComponents {
     beforeVariants(selector().all()) {
-        it.enable = it.buildType == "benchmark"
+        it.enable = it.buildType == "benchmark" || it.buildType == "nonMinifiedRelease"
     }
 }

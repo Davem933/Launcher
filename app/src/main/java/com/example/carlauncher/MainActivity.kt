@@ -23,6 +23,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -66,6 +67,9 @@ import com.example.carlauncher.ui.widgets.WidgetViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+/** After start-up (first frame, map style), compose the Trip page too — see HorizontalPager. */
+private const val PRELOAD_ALL_PAGES_DELAY_MS = 2_000L
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -131,6 +135,16 @@ class MainActivity : ComponentActivity() {
             CarLauncherTheme(isDark = isDark) {
                 DeviceScaleProvider {
                     val pagerState = rememberPagerState(pageCount = { 3 })
+                    // Start with only page 0 + 1 composed (faster first frame), then keep all
+                    // three pages composed. With 1 for good, reaching the Trip page disposed
+                    // page 0 (MapView teardown ~40 ms) and swiping back rebuilt it — the P99
+                    // spikes in pagerSwipe. Deferred so the Trip page (Room, voice notes) isn't
+                    // part of the cold-start frame.
+                    var preloadAllPages by remember { mutableStateOf(false) }
+                    LaunchedEffect(Unit) {
+                        delay(PRELOAD_ALL_PAGES_DELAY_MS)
+                        preloadAllPages = true
+                    }
                     val incidentEnabled = BuildConfig.INCIDENT_RECORDER_ENABLED
                     var showIncidentRecorder by remember { mutableStateOf(false) }
                     // Disabled for the duration of any touch on the map panel (see MapNavPanel's
@@ -163,7 +177,7 @@ class MainActivity : ComponentActivity() {
                                 HorizontalPager(
                                     state = pagerState,
                                     modifier = Modifier.fillMaxSize(),
-                                    beyondViewportPageCount = 1,
+                                    beyondViewportPageCount = if (preloadAllPages) 2 else 1,
                                     userScrollEnabled = !mapTouchActive,
                                 ) { page ->
                                     when (page) {

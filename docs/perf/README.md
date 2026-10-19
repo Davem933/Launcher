@@ -5,7 +5,7 @@ Helio G80, Android 16). Emulátor na výkon nepoužívat — čísla z něj nic 
 
 **Nikdy neměřit debug build.** Compose je v debugu výrazně pomalejší (studený start ~1,9 s
 vs. ~1,0 s, viz [výsledky](2026-10-19-baseline.md)). Na měření je build typ `benchmark`
-(`app/build.gradle.kts`): release bez R8, podepsaný debug klíčem, `profileable`, vlastní
+(`app/build.gradle.kts`): release (s R8 + Baseline Profile), podepsaný debug klíčem, `profileable`, vlastní
 `applicationId` `com.example.carlauncher.benchmark` — instaluje se vedle debug buildu a
 není výchozí HOME, takže ho systém po zabití procesu sám nespouští (jinak by „studený“
 start nebyl studený).
@@ -37,8 +37,10 @@ Opakovatelné testy přes `androidx.benchmark.macro` + UiAutomator:
 | Test | Co měří |
 |---|---|
 | `StartupBenchmark.coldStartNoCompilation` | TTID hned po instalaci (vše interpretováno) — nejhorší případ |
-| `StartupBenchmark.coldStartWarmedUp` | TTID po „zahřátí“ (ART JIT profil) — běžný stav |
-| `StartupBenchmark.warmStartWarmedUp` | teplý start (proces žije, Activity znovu) |
+| `StartupBenchmark.coldStartBaselineProfile` | TTID hned po instalaci, zkompilovaný jen přibalený Baseline Profile — to, co dostane uživatel |
+| `StartupBenchmark.warmStartBaselineProfile` | teplý start, totéž |
+| `StartupBenchmark.coldStartWarmedUp` | TTID po „zahřátí“ (ART JIT profil, bez Baseline Profile) — srovnání s fází 1 |
+| `StartupBenchmark.warmStartWarmedUp` | teplý start, totéž |
 | `FrameTimingBenchmark.pagerSwipe` | swipe Launcher → Widgety → Trip a zpět |
 | `FrameTimingBenchmark.mapPan` | posun Mapbox mapy (3D Standard, pitch 45°) |
 | `FrameTimingBenchmark.appDrawerOpenAndScroll` | otevření AppDraweru + fling mřížkou |
@@ -62,6 +64,29 @@ https://ui.perfetto.dev).
 
 Frame testy předpokládají výchozí vzhled **Klasický** s dockem dole (souřadnice tahů jsou
 zlomky obrazovky). Mapa tahá dlaždice ze sítě → porovnávat jen běhy na stejné Wi-Fi.
+
+## Baseline Profile (fáze 2)
+
+Profil horkých cest (start, swipe stránek, AppDrawer) je v
+`app/src/main/generated/baselineProfiles/` a `androidx.profileinstaller` ho při instalaci
+předá ART → kód je předkompilovaný hned po instalaci. Generuje ho
+`BaselineProfileGenerator` v `:macrobenchmark` nad variantou `nonMinifiedRelease` (vytváří ji
+plugin; id `com.example.carlauncher.benchmark`, takže nepřepíše debug build). Po větších
+změnách UI přegenerovat (~10 min) a commitnout oba soubory:
+
+```bash
+./gradlew :app:generateBaselineProfile -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=LOW-BATTERY
+```
+
+Generátor i frame testy sdílí cesty uživatele z `BenchmarkSetup.kt`.
+
+## R8
+
+Release (a tím i `benchmark`) má zapnuté `isMinifyEnabled` + `isShrinkResources`, pravidla
+v `app/proguard-rules.pro`. Mapbox v logcatu i s R8 vypisuje `ClassNotFoundException:
+com.mapbox.common.…` z nativních vláken (`System.err`, ne pád) — funkčnost to neovlivňuje.
+Po změně závislostí proklikat na tabletu mapu, vyhledávání + navigaci, Incident Recorder a
+hlasové poznámky (enumy se ukládají jménem → pravidlo `-keepclassmembers enum`).
 
 ## Jak číst čísla
 
