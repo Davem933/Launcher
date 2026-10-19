@@ -53,6 +53,17 @@ android {
                 "proguard-rules.pro"
             )
         }
+        // Release-like build for :macrobenchmark (performance testing). Debug Compose is several
+        // times slower than release, so never measure the debug build. Own applicationId so the
+        // measured app isn't the default HOME — otherwise the system relaunches it right after
+        // macrobenchmark kills the process and the "cold" start isn't cold.
+        create("benchmark") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            applicationIdSuffix = ".benchmark"
+            isDebuggable = false
+        }
     }
 
     compileOptions {

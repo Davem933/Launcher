@@ -36,3 +36,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "CarLauncher"
 include(":app")
+include(":macrobenchmark")
