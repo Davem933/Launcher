@@ -1,5 +1,8 @@
 # CarLauncher
 
+[![CI](https://github.com/Davem933/Launcher/actions/workflows/ci.yml/badge.svg)](https://github.com/Davem933/Launcher/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 > A personal Android car launcher for a tablet mounted on the dashboard. It replaces the default Android home screen with a fullscreen, landscape-only interface built for driving: a 3D Mapbox map with built-in turn-by-turn navigation, music, weather, a trip log, **AI voice notes** and a manual **dashcam with licence-plate recognition**.
 
 ---
@@ -249,4 +252,4 @@ More detail for contributors is in [CLAUDE.md](CLAUDE.md).
 
 ## License
 
-Personal project — not licensed for redistribution.
+[MIT](LICENSE)
