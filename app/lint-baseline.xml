@@ -1,0 +1,1243 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<issues format="6" by="lint 8.5.2" type="baseline" client="gradle" dependencies="false" name="AGP (8.5.2)" variant="all" version="8.5.2">
+
+    <issue
+        id="MissingPermission"
+        message="Call requires permission which may be rejected by user: code should explicitly check to see if permission is available (with `checkPermission`) or explicitly handle a potential `SecurityException`"
+        errorLine1="                        mapboxNavigation.startTripSession()"
+        errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/carlauncher/ui/map/MapWidget.kt"
+            line="452"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="Lifecycle"
+        message="It&apos;s no longer required to manually invoke onStart/onStop/onResume/onDestroy/onLowMemory MapView lifecycle methods explicitly. The Mapbox Maps SDK for Android depends on the plugin-lifecycle that leverages androidx.lifecycle to make the MapView a lifecycle aware component. This behavior is automatically enforced when appcompact 1.3.0+ is used. The plugin-lifecycle can be removed from class path to opt-out of the associated behavior."
+        errorLine1="                Lifecycle.Event.ON_START -> mapView.onStart()"
+        errorLine2="                                            ~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/carlauncher/ui/map/MapWidget.kt"
+            line="1108"
+            column="45"/>
+    </issue>
+
+    <issue
+        id="Lifecycle"
+        message="It&apos;s no longer required to manually invoke onStart/onStop/onResume/onDestroy/onLowMemory MapView lifecycle methods explicitly. The Mapbox Maps SDK for Android depends on the plugin-lifecycle that leverages androidx.lifecycle to make the MapView a lifecycle aware component. This behavior is automatically enforced when appcompact 1.3.0+ is used. The plugin-lifecycle can be removed from class path to opt-out of the associated behavior."
+        errorLine1="                Lifecycle.Event.ON_RESUME -> mapView.onResume()"
+        errorLine2="                                             ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/carlauncher/ui/map/MapWidget.kt"
+            line="1111"
+            column="46"/>
+    </issue>
+
+    <issue
+        id="Lifecycle"
+        message="It&apos;s no longer required to manually invoke onStart/onStop/onResume/onDestroy/onLowMemory MapView lifecycle methods explicitly. The Mapbox Maps SDK for Android depends on the plugin-lifecycle that leverages androidx.lifecycle to make the MapView a lifecycle aware component. This behavior is automatically enforced when appcompact 1.3.0+ is used. The plugin-lifecycle can be removed from class path to opt-out of the associated behavior."
+        errorLine1="                Lifecycle.Event.ON_STOP -> mapView.onStop()"
+        errorLine2="                                           ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/carlauncher/ui/map/MapWidget.kt"
+            line="1112"
+            column="44"/>
+    </issue>
+
+    <issue
+        id="Lifecycle"
+        message="It&apos;s no longer required to manually invoke onStart/onStop/onResume/onDestroy/onLowMemory MapView lifecycle methods explicitly. The Mapbox Maps SDK for Android depends on the plugin-lifecycle that leverages androidx.lifecycle to make the MapView a lifecycle aware component. This behavior is automatically enforced when appcompact 1.3.0+ is used. The plugin-lifecycle can be removed from class path to opt-out of the associated behavior."
+        errorLine1="        if (state.isAtLeast(Lifecycle.State.STARTED)) mapView.onStart()"
+        errorLine2="                                                      ~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/carlauncher/ui/map/MapWidget.kt"
+            line="1118"
+            column="55"/>
+    </issue>
+
+    <issue
+        id="Lifecycle"
+        message="It&apos;s no longer required to manually invoke onStart/onStop/onResume/onDestroy/onLowMemory MapView lifecycle methods explicitly. The Mapbox Maps SDK for Android depends on the plugin-lifecycle that leverages androidx.lifecycle to make the MapView a lifecycle aware component. This behavior is automatically enforced when appcompact 1.3.0+ is used. The plugin-lifecycle can be removed from class path to opt-out of the associated behavior."
+        errorLine1="        if (state.isAtLeast(Lifecycle.State.RESUMED)) mapView.onResume()"
+        errorLine2="                                                      ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/carlauncher/ui/map/MapWidget.kt"
+            line="1119"
+            column="55"/>
+    </issue>
+
+    <issue
+        id="Lifecycle"
+        message="It&apos;s no longer required to manually invoke onStart/onStop/onResume/onDestroy/onLowMemory MapView lifecycle methods explicitly. The Mapbox Maps SDK for Android depends on the plugin-lifecycle that leverages androidx.lifecycle to make the MapView a lifecycle aware component. This behavior is automatically enforced when appcompact 1.3.0+ is used. The plugin-lifecycle can be removed from class path to opt-out of the associated behavior."
+        errorLine1="                mapView.onDestroy()"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/carlauncher/ui/map/MapWidget.kt"
+            line="1138"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="SelectedPhotoAccess"
+        message="Your app is currently not handling Selected Photos Access introduced in Android 14+"
+        errorLine1="    &lt;uses-permission android:name=&quot;android.permission.READ_MEDIA_IMAGES&quot; />"
+        errorLine2="                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/AndroidManifest.xml"
+            line="10"
+            column="36"/>
+    </issue>
+
+    <issue
+        id="AndroidGradlePluginVersion"
+        message="A newer version of com.android.application than 8.5.2 is available: 9.4.1"
+        errorLine1="agp = &quot;8.5.2&quot;"
+        errorLine2="      ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="3"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="AndroidGradlePluginVersion"
+        message="A newer version of com.android.application than 8.5.2 is available: 9.4.1"
+        errorLine1="agp = &quot;8.5.2&quot;"
+        errorLine2="      ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="3"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="AndroidGradlePluginVersion"
+        message="A newer version of com.android.application than 8.5.2 is available: 9.4.1"
+        errorLine1="agp = &quot;8.5.2&quot;"
+        errorLine2="      ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="3"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="AndroidGradlePluginVersion"
+        message="A newer version of com.android.test than 8.5.2 is available: 9.4.1"
+        errorLine1="agp = &quot;8.5.2&quot;"
+        errorLine2="      ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="3"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="AndroidGradlePluginVersion"
+        message="A newer version of com.android.test than 8.5.2 is available: 9.4.1"
+        errorLine1="agp = &quot;8.5.2&quot;"
+        errorLine2="      ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="3"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="AndroidGradlePluginVersion"
+        message="A newer version of com.android.test than 8.5.2 is available: 9.4.1"
+        errorLine1="agp = &quot;8.5.2&quot;"
+        errorLine2="      ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="3"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.datastore:datastore-preferences than 1.1.1 is available: 1.3.0"
+        errorLine1="    implementation(&quot;androidx.datastore:datastore-preferences:1.1.1&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="158"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.compose:compose-bom than 2024.09.00 is available: 2026.09.00"
+        errorLine1="composeBom = &quot;2024.09.00&quot;"
+        errorLine2="             ~~~~~~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="4"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.compose:compose-bom than 2024.09.00 is available: 2026.09.00"
+        errorLine1="composeBom = &quot;2024.09.00&quot;"
+        errorLine2="             ~~~~~~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="4"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.compose:compose-bom than 2024.09.00 is available: 2026.09.00"
+        errorLine1="composeBom = &quot;2024.09.00&quot;"
+        errorLine2="             ~~~~~~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="4"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.hilt:hilt-navigation-compose than 1.2.0 is available: 1.4.0"
+        errorLine1="hiltNavigationCompose = &quot;1.2.0&quot;"
+        errorLine2="                        ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="6"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.hilt:hilt-navigation-compose than 1.2.0 is available: 1.4.0"
+        errorLine1="hiltNavigationCompose = &quot;1.2.0&quot;"
+        errorLine2="                        ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="6"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.hilt:hilt-navigation-compose than 1.2.0 is available: 1.4.0"
+        errorLine1="hiltNavigationCompose = &quot;1.2.0&quot;"
+        errorLine2="                        ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="6"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of com.google.android.gms:play-services-location than 21.3.0 is available: 21.4.0"
+        errorLine1="playServicesLocation = &quot;21.3.0&quot;"
+        errorLine2="                       ~~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="7"
+            column="24"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of com.google.android.gms:play-services-location than 21.3.0 is available: 21.4.0"
+        errorLine1="playServicesLocation = &quot;21.3.0&quot;"
+        errorLine2="                       ~~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="7"
+            column="24"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of com.google.android.gms:play-services-location than 21.3.0 is available: 21.4.0"
+        errorLine1="playServicesLocation = &quot;21.3.0&quot;"
+        errorLine2="                       ~~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="7"
+            column="24"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.lifecycle:lifecycle-runtime-compose than 2.8.4 is available: 2.11.0"
+        errorLine1="lifecycleCompose = &quot;2.8.4&quot;"
+        errorLine2="                   ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="8"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.lifecycle:lifecycle-runtime-compose than 2.8.4 is available: 2.11.0"
+        errorLine1="lifecycleCompose = &quot;2.8.4&quot;"
+        errorLine2="                   ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="8"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.lifecycle:lifecycle-runtime-compose than 2.8.4 is available: 2.11.0"
+        errorLine1="lifecycleCompose = &quot;2.8.4&quot;"
+        errorLine2="                   ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="8"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.core:core-ktx than 1.13.1 is available: 1.19.1"
+        errorLine1="coreKtx = &quot;1.13.1&quot;"
+        errorLine2="          ~~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="9"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.core:core-ktx than 1.13.1 is available: 1.19.1"
+        errorLine1="coreKtx = &quot;1.13.1&quot;"
+        errorLine2="          ~~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="9"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.core:core-ktx than 1.13.1 is available: 1.19.1"
+        errorLine1="coreKtx = &quot;1.13.1&quot;"
+        errorLine2="          ~~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="9"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.lifecycle:lifecycle-runtime-ktx than 2.8.4 is available: 2.11.0"
+        errorLine1="lifecycleRuntimeKtx = &quot;2.8.4&quot;"
+        errorLine2="                      ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="10"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.lifecycle:lifecycle-runtime-ktx than 2.8.4 is available: 2.11.0"
+        errorLine1="lifecycleRuntimeKtx = &quot;2.8.4&quot;"
+        errorLine2="                      ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="10"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.lifecycle:lifecycle-runtime-ktx than 2.8.4 is available: 2.11.0"
+        errorLine1="lifecycleRuntimeKtx = &quot;2.8.4&quot;"
+        errorLine2="                      ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="10"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.lifecycle:lifecycle-viewmodel-compose than 2.8.4 is available: 2.11.0"
+        errorLine1="lifecycleRuntimeKtx = &quot;2.8.4&quot;"
+        errorLine2="                      ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="10"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.lifecycle:lifecycle-viewmodel-compose than 2.8.4 is available: 2.11.0"
+        errorLine1="lifecycleRuntimeKtx = &quot;2.8.4&quot;"
+        errorLine2="                      ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="10"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.lifecycle:lifecycle-viewmodel-compose than 2.8.4 is available: 2.11.0"
+        errorLine1="lifecycleRuntimeKtx = &quot;2.8.4&quot;"
+        errorLine2="                      ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="10"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.activity:activity-compose than 1.9.1 is available: 1.13.0"
+        errorLine1="activityCompose = &quot;1.9.1&quot;"
+        errorLine2="                  ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="11"
+            column="19"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.activity:activity-compose than 1.9.1 is available: 1.13.0"
+        errorLine1="activityCompose = &quot;1.9.1&quot;"
+        errorLine2="                  ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="11"
+            column="19"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.activity:activity-compose than 1.9.1 is available: 1.13.0"
+        errorLine1="activityCompose = &quot;1.9.1&quot;"
+        errorLine2="                  ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="11"
+            column="19"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.navigation:navigation-compose than 2.7.7 is available: 2.10.2"
+        errorLine1="navigationCompose = &quot;2.7.7&quot;"
+        errorLine2="                    ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="12"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.navigation:navigation-compose than 2.7.7 is available: 2.10.2"
+        errorLine1="navigationCompose = &quot;2.7.7&quot;"
+        errorLine2="                    ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="12"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.navigation:navigation-compose than 2.7.7 is available: 2.10.2"
+        errorLine1="navigationCompose = &quot;2.7.7&quot;"
+        errorLine2="                    ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="12"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-android than 1.8.1 is available: 1.9.0"
+        errorLine1="coroutines = &quot;1.8.1&quot;"
+        errorLine2="             ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="13"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-android than 1.8.1 is available: 1.9.0"
+        errorLine1="coroutines = &quot;1.8.1&quot;"
+        errorLine2="             ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="13"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-android than 1.8.1 is available: 1.9.0"
+        errorLine1="coroutines = &quot;1.8.1&quot;"
+        errorLine2="             ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="13"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.room:room-compiler than 2.6.1 is available: 2.8.5"
+        errorLine1="room = &quot;2.6.1&quot;"
+        errorLine2="       ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="14"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.room:room-compiler than 2.6.1 is available: 2.8.5"
+        errorLine1="room = &quot;2.6.1&quot;"
+        errorLine2="       ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="14"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.room:room-compiler than 2.6.1 is available: 2.8.5"
+        errorLine1="room = &quot;2.6.1&quot;"
+        errorLine2="       ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="14"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.room:room-ktx than 2.6.1 is available: 2.8.5"
+        errorLine1="room = &quot;2.6.1&quot;"
+        errorLine2="       ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="14"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.room:room-ktx than 2.6.1 is available: 2.8.5"
+        errorLine1="room = &quot;2.6.1&quot;"
+        errorLine2="       ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="14"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.room:room-ktx than 2.6.1 is available: 2.8.5"
+        errorLine1="room = &quot;2.6.1&quot;"
+        errorLine2="       ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="14"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.room:room-runtime than 2.6.1 is available: 2.8.5"
+        errorLine1="room = &quot;2.6.1&quot;"
+        errorLine2="       ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="14"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.room:room-runtime than 2.6.1 is available: 2.8.5"
+        errorLine1="room = &quot;2.6.1&quot;"
+        errorLine2="       ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="14"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.room:room-runtime than 2.6.1 is available: 2.8.5"
+        errorLine1="room = &quot;2.6.1&quot;"
+        errorLine2="       ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="14"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.camera:camera-camera2 than 1.4.2 is available: 1.6.2"
+        errorLine1="camerax = &quot;1.4.2&quot;"
+        errorLine2="          ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="15"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.camera:camera-camera2 than 1.4.2 is available: 1.6.2"
+        errorLine1="camerax = &quot;1.4.2&quot;"
+        errorLine2="          ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="15"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.camera:camera-camera2 than 1.4.2 is available: 1.6.2"
+        errorLine1="camerax = &quot;1.4.2&quot;"
+        errorLine2="          ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="15"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.camera:camera-core than 1.4.2 is available: 1.6.2"
+        errorLine1="camerax = &quot;1.4.2&quot;"
+        errorLine2="          ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="15"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.camera:camera-core than 1.4.2 is available: 1.6.2"
+        errorLine1="camerax = &quot;1.4.2&quot;"
+        errorLine2="          ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="15"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.camera:camera-core than 1.4.2 is available: 1.6.2"
+        errorLine1="camerax = &quot;1.4.2&quot;"
+        errorLine2="          ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="15"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.camera:camera-lifecycle than 1.4.2 is available: 1.6.2"
+        errorLine1="camerax = &quot;1.4.2&quot;"
+        errorLine2="          ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="15"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.camera:camera-lifecycle than 1.4.2 is available: 1.6.2"
+        errorLine1="camerax = &quot;1.4.2&quot;"
+        errorLine2="          ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="15"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.camera:camera-lifecycle than 1.4.2 is available: 1.6.2"
+        errorLine1="camerax = &quot;1.4.2&quot;"
+        errorLine2="          ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="15"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.camera:camera-video than 1.4.2 is available: 1.6.2"
+        errorLine1="camerax = &quot;1.4.2&quot;"
+        errorLine2="          ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="15"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.camera:camera-video than 1.4.2 is available: 1.6.2"
+        errorLine1="camerax = &quot;1.4.2&quot;"
+        errorLine2="          ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="15"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.camera:camera-video than 1.4.2 is available: 1.6.2"
+        errorLine1="camerax = &quot;1.4.2&quot;"
+        errorLine2="          ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="15"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.camera:camera-view than 1.4.2 is available: 1.6.2"
+        errorLine1="camerax = &quot;1.4.2&quot;"
+        errorLine2="          ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="15"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.camera:camera-view than 1.4.2 is available: 1.6.2"
+        errorLine1="camerax = &quot;1.4.2&quot;"
+        errorLine2="          ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="15"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.camera:camera-view than 1.4.2 is available: 1.6.2"
+        errorLine1="camerax = &quot;1.4.2&quot;"
+        errorLine2="          ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="15"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.work:work-runtime-ktx than 2.9.1 is available: 2.12.0"
+        errorLine1="work = &quot;2.9.1&quot;"
+        errorLine2="       ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="17"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.work:work-runtime-ktx than 2.9.1 is available: 2.12.0"
+        errorLine1="work = &quot;2.9.1&quot;"
+        errorLine2="       ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="17"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.work:work-runtime-ktx than 2.9.1 is available: 2.12.0"
+        errorLine1="work = &quot;2.9.1&quot;"
+        errorLine2="       ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="17"
+            column="8"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.hilt:hilt-compiler than 1.2.0 is available: 1.4.0"
+        errorLine1="hiltWork = &quot;1.2.0&quot;"
+        errorLine2="           ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="18"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.hilt:hilt-compiler than 1.2.0 is available: 1.4.0"
+        errorLine1="hiltWork = &quot;1.2.0&quot;"
+        errorLine2="           ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="18"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.hilt:hilt-compiler than 1.2.0 is available: 1.4.0"
+        errorLine1="hiltWork = &quot;1.2.0&quot;"
+        errorLine2="           ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="18"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.hilt:hilt-work than 1.2.0 is available: 1.4.0"
+        errorLine1="hiltWork = &quot;1.2.0&quot;"
+        errorLine2="           ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="18"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.hilt:hilt-work than 1.2.0 is available: 1.4.0"
+        errorLine1="hiltWork = &quot;1.2.0&quot;"
+        errorLine2="           ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="18"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.hilt:hilt-work than 1.2.0 is available: 1.4.0"
+        errorLine1="hiltWork = &quot;1.2.0&quot;"
+        errorLine2="           ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="18"
+            column="12"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.test.ext:junit than 1.2.1 is available: 1.3.0"
+        errorLine1="androidxTestExtJunit = &quot;1.2.1&quot;"
+        errorLine2="                       ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="23"
+            column="24"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.test.ext:junit than 1.2.1 is available: 1.3.0"
+        errorLine1="androidxTestExtJunit = &quot;1.2.1&quot;"
+        errorLine2="                       ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="23"
+            column="24"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.test.ext:junit than 1.2.1 is available: 1.3.0"
+        errorLine1="androidxTestExtJunit = &quot;1.2.1&quot;"
+        errorLine2="                       ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="23"
+            column="24"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.test.uiautomator:uiautomator than 2.3.0 is available: 2.4.0"
+        errorLine1="uiautomator = &quot;2.3.0&quot;"
+        errorLine2="              ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="24"
+            column="15"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.test.uiautomator:uiautomator than 2.3.0 is available: 2.4.0"
+        errorLine1="uiautomator = &quot;2.3.0&quot;"
+        errorLine2="              ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="24"
+            column="15"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.test.uiautomator:uiautomator than 2.3.0 is available: 2.4.0"
+        errorLine1="uiautomator = &quot;2.3.0&quot;"
+        errorLine2="              ~~~~~~~">
+        <location
+            file="$HOME/carLauncher/CarLauncher/.claude/worktrees/github-professional-review-ff7a24/gradle/libs.versions.toml"
+            line="24"
+            column="15"/>
+    </issue>
+
+    <issue
+        id="ModifierParameter"
+        message="Modifier parameter should be the first optional parameter"
+        errorLine1="    modifier: Modifier = Modifier,"
+        errorLine2="    ~~~~~~~~">
+        <location
+            file="src/main/java/com/example/carlauncher/ui/launcher/MapNavPanel.kt"
+            line="206"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="ModifierParameter"
+        message="Modifier parameter should be the first optional parameter"
+        errorLine1="    modifier: Modifier = Modifier,"
+        errorLine2="    ~~~~~~~~">
+        <location
+            file="src/main/java/com/example/carlauncher/ui/navigation/NavAreaWidget.kt"
+            line="67"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="ModifierParameter"
+        message="Modifier parameter should be the first optional parameter"
+        errorLine1="    modifier: Modifier = Modifier,"
+        errorLine2="    ~~~~~~~~">
+        <location
+            file="src/main/java/com/example/carlauncher/ui/navigation/NavWidget.kt"
+            line="56"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="ModifierParameter"
+        message="Modifier parameter should be the first optional parameter"
+        errorLine1="    modifier: Modifier = Modifier,"
+        errorLine2="    ~~~~~~~~">
+        <location
+            file="src/main/java/com/example/carlauncher/ui/map/SearchOverlay.kt"
+            line="125"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="DiscouragedApi"
+        message="Should not restrict activity to fixed orientation. This may not be suitable for different form factors, causing the app to be letterboxed."
+        errorLine1="            android:screenOrientation=&quot;landscape&quot;"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/AndroidManifest.xml"
+            line="34"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="UseCompatLoadingForDrawables"
+        message="Use `AppCompatResources.getDrawable()`"
+        errorLine1="            val d      = pkgCtx.getDrawable(resId) ?: return null"
+        errorLine2="                         ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/carlauncher/service/MediaListenerService.kt"
+            line="210"
+            column="26"/>
+    </issue>
+
+    <issue
+        id="DataExtractionRules"
+        message="The attribute `android:allowBackup` is deprecated from Android 12 and may be removed in future versions. Consider adding the attribute `android:dataExtractionRules` specifying an `@xml` resource which configures backups and device transfers on Android 12 and higher."
+        errorLine1="        android:allowBackup=&quot;false&quot;"
+        errorLine2="                             ~~~~~">
+        <location
+            file="src/main/AndroidManifest.xml"
+            line="24"
+            column="30"/>
+    </issue>
+
+    <issue
+        id="QueryAllPackagesPermission"
+        message="A `&lt;queries>` declaration should generally be used instead of QUERY_ALL_PACKAGES; see https://g.co/dev/packagevisibility for details"
+        errorLine1="    &lt;uses-permission android:name=&quot;android.permission.QUERY_ALL_PACKAGES&quot; />"
+        errorLine2="                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/AndroidManifest.xml"
+            line="11"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="Unnecessary; SDK_INT is always >= 31"
+        errorLine1="            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/carlauncher/MainActivity.kt"
+            line="319"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="This folder configuration (`v26`) is unnecessary; `minSdkVersion` is 31. Merge all the resources in this folder into `mipmap-anydpi`.">
+        <location
+            file="src/main/res/mipmap-anydpi-v26"/>
+    </issue>
+
+    <issue
+        id="KaptUsageInsteadOfKsp"
+        message="This library supports using KSP instead of kapt, which greatly improves performance. Learn more: https://developer.android.com/studio/build/migrate-to-ksp"
+        errorLine1="    kapt(libs.room.compiler)"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="163"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="AutoboxingStateCreation"
+        message="Prefer `mutableFloatStateOf` instead of `mutableStateOf`"
+        errorLine1="    var progressFraction by mutableStateOf(0f)"
+        errorLine2="                            ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/carlauncher/data/navigation/NavRepository.kt"
+            line="41"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="AutoboxingStateCreation"
+        message="Prefer `mutableIntStateOf` instead of `mutableStateOf`"
+        errorLine1="    var canvasWidthPx by remember { mutableStateOf(0) }"
+        errorLine2="                                    ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/carlauncher/ui/widgets/WidgetCanvas.kt"
+            line="55"
+            column="37"/>
+    </issue>
+
+    <issue
+        id="AutoboxingStateCreation"
+        message="Prefer `mutableIntStateOf` instead of `mutableStateOf`"
+        errorLine1="    var canvasHeightPx by remember { mutableStateOf(0) }"
+        errorLine2="                                     ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/carlauncher/ui/widgets/WidgetCanvas.kt"
+            line="56"
+            column="38"/>
+    </issue>
+
+    <issue
+        id="AutoboxingStateCreation"
+        message="Prefer `mutableFloatStateOf` instead of `mutableStateOf`"
+        errorLine1="    var dragOffsetX by remember { mutableStateOf(0f) }"
+        errorLine2="                                  ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/carlauncher/ui/widgets/WidgetCanvas.kt"
+            line="113"
+            column="35"/>
+    </issue>
+
+    <issue
+        id="AutoboxingStateCreation"
+        message="Prefer `mutableFloatStateOf` instead of `mutableStateOf`"
+        errorLine1="    var dragOffsetY by remember { mutableStateOf(0f) }"
+        errorLine2="                                  ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/carlauncher/ui/widgets/WidgetCanvas.kt"
+            line="114"
+            column="35"/>
+    </issue>
+
+    <issue
+        id="UsableSpace"
+        message="Consider also using `StorageManager#getAllocatableBytes` and `allocateBytes` which will consider clearable cached data"
+        errorLine1="        dir(context).usableSpace > MIN_FREE_BYTES"
+        errorLine2="                     ~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/carlauncher/data/incident/IncidentFiles.kt"
+            line="37"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="MonochromeLauncherIcon"
+        message="The application adaptive icon is missing a monochrome tag"
+        errorLine1="&lt;adaptive-icon xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;>"
+        errorLine2="^">
+        <location
+            file="src/main/res/mipmap-anydpi-v26/ic_launcher.xml"
+            line="2"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="MonochromeLauncherIcon"
+        message="The application adaptive roundIcon is missing a monochrome tag"
+        errorLine1="&lt;adaptive-icon xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;>"
+        errorLine2="^">
+        <location
+            file="src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml"
+            line="2"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        message="Use the existing version catalog reference (`libs.junit`) instead"
+        errorLine1="    testImplementation(&quot;junit:junit:4.13.2&quot;)"
+        errorLine2="                       ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="143"
+            column="24"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        message="Use version catalog instead"
+        errorLine1="    implementation(&quot;androidx.compose.material:material-icons-extended&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="155"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        message="Use version catalog instead"
+        errorLine1="    implementation(&quot;androidx.datastore:datastore-preferences:1.1.1&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="158"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        message="Use version catalog instead"
+        errorLine1="    implementation(&quot;com.mapbox.maps:android:11.30.1&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="181"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        message="Use version catalog instead"
+        errorLine1="    implementation(&quot;com.mapbox.navigationcore:navigation:3.30.1&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="184"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        message="Use version catalog instead"
+        errorLine1="    implementation(&quot;com.mapbox.navigationcore:ui-components:3.30.1&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="185"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        message="Use version catalog instead"
+        errorLine1="    implementation(&quot;com.mapbox.search:mapbox-search-android:2.30.1&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="188"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="UseTomlInstead"
+        message="Use version catalog instead"
+        errorLine1="    implementation(&quot;com.mapbox.search:mapbox-search-android-ui:2.30.1&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="189"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="ConstantLocale"
+        message="Assigning `Locale.getDefault()` to a final static field is suspicious; this code will not work correctly if the user changes locale while the app is running"
+        errorLine1="    private val dateFmt = SimpleDateFormat(&quot;yyyy-MM-dd&quot;, Locale.getDefault())"
+        errorLine2="                                                         ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/carlauncher/data/trip/CsvExporter.kt"
+            line="13"
+            column="58"/>
+    </issue>
+
+    <issue
+        id="ConstantLocale"
+        message="Assigning `Locale.getDefault()` to a final static field is suspicious; this code will not work correctly if the user changes locale while the app is running"
+        errorLine1="    private val timeFmt = SimpleDateFormat(&quot;HH:mm&quot;, Locale.getDefault())"
+        errorLine2="                                                    ~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/com/example/carlauncher/data/trip/CsvExporter.kt"
+            line="14"
+            column="53"/>
+    </issue>
+
+</issues>

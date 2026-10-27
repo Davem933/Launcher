@@ -86,6 +86,12 @@ android {
         // android.util.Log apod. vrací v JVM testech default místo "Method not mocked"
         unitTests.isReturnDefaultValues = true
     }
+
+    lint {
+        // Známé chyby z doby před CI (MissingPermission v MapWidget, QUERY_ALL_PACKAGES) —
+        // CI padá jen na nové. Po opravě přegenerovat: ./gradlew updateLintBaseline
+        baseline = file("lint-baseline.xml")
+    }
 }
 
 // Baseline Profile (fáze 2 výkonu): generuje :macrobenchmark (BaselineProfileGenerator) na
