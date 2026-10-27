@@ -1,8 +1,25 @@
+# Gradle / build output
 .gradle/
-app/build/
+.kotlin/
 build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+
+# IDE
+.idea/
 *.iml
-.idea/workspace.xml
-.idea/caches/
+.DS_Store
+
+# Local configuration and secrets
 local.properties
+*.keystore
+*.jks
+
+# Local tooling and personal notes
+.claude/
 .superpowers/
+graphify-out/
+BUGS.md
