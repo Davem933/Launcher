@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
@@ -16,9 +15,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.carlauncher.ui.theme.CarColors
 
 /**
  * Compact, content-sized "klidový stav" search trigger — matches the reference app's small
@@ -31,11 +30,13 @@ fun DestinationSearchBar(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val chrome = LocalMapChrome.current
     Row(
         modifier = modifier
-            .clip(RoundedCornerShape(28.dp))
-            .background(CarColors.Surface)
-            .border(1.dp, CarColors.BorderSoft, RoundedCornerShape(28.dp))
+            .shadow(chrome.searchShadow, chrome.searchShape, clip = false)
+            .clip(chrome.searchShape)
+            .background(chrome.searchBg)
+            .then(chrome.searchBorder?.let { Modifier.border(1.dp, it, chrome.searchShape) } ?: Modifier)
             .clickable(onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -43,9 +44,9 @@ fun DestinationSearchBar(
         Icon(
             imageVector = Icons.Default.Search,
             contentDescription = null,
-            tint = CarColors.Text3,
+            tint = chrome.searchIconTint,
         )
         Spacer(Modifier.width(10.dp))
-        Text("Hledat", color = CarColors.Text3, fontSize = 16.sp)
+        Text(chrome.searchLabel, color = chrome.searchFg, fontSize = 16.sp)
     }
 }

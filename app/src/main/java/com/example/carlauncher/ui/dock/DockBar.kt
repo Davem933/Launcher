@@ -60,6 +60,9 @@ import com.example.carlauncher.data.model.DockPosition
 import com.example.carlauncher.data.model.DockSlot
 import com.example.carlauncher.data.model.LauncherStyle
 import com.example.carlauncher.ui.theme.CarColors
+import com.example.carlauncher.ui.skin.SkinDockBar
+import com.example.carlauncher.ui.skin.SkinSlotContent
+import com.example.carlauncher.ui.skin.skinSlotSize
 
 private val DockBorderTop = Color(0xFF252530)
 private val SlotBg        = Color(0xFF1A1A28)
@@ -96,6 +99,7 @@ fun DockBar(
     val aurora = style.isAurora
     // 8 slots + menu + status have to fit the ~686dp screen height in the vertical dock.
     val slotSize = when {
+        style.isSkin -> skinSlotSize(style)
         aurora   -> AuroraTileSize
         vertical -> SlotSizeCompact
         else     -> SlotSize
@@ -110,7 +114,7 @@ fun DockBar(
             DockSlotTile(
                 slot        = slot,
                 slotSize    = slotSize,
-                aurora      = aurora,
+                style       = style,
                 editMode   = editMode && !locked,
                 onClick     = {
                     when {
@@ -131,7 +135,15 @@ fun DockBar(
 
     // No shelf/card background — tiles float directly over whatever is behind the dock,
     // each tile carries its own shadow for legibility instead.
-    if (aurora && vertical) {
+    if (style.isSkin) {
+        SkinDockBar(
+            style = style,
+            vertical = vertical,
+            onMenu = { viewModel.openAppDrawer() },
+            modifier = modifier,
+            slotTiles = slotTiles,
+        )
+    } else if (aurora && vertical) {
         Column(
             modifier = modifier
                 .fillMaxHeight()
@@ -317,11 +329,12 @@ private fun Modifier.auroraOutline(aurora: Boolean, shape: Shape): Modifier =
 private fun DockSlotTile(
     slot: DockSlot,
     slotSize: Dp,
-    aurora: Boolean,
+    style: LauncherStyle,
     editMode: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
+    val aurora = style.isAurora
     val shape = if (aurora) AuroraTileShape else SlotShape
     val wiggle = remember { Animatable(0f) }
     LaunchedEffect(editMode) {
@@ -335,8 +348,9 @@ private fun DockSlotTile(
     }
 
     Box(
+        // Skin tiles size themselves (the split tile is a wider pill) — just keep the 2dp gutter.
         modifier = Modifier
-            .size(slotSize + 4.dp)
+            .then(if (style.isSkin) Modifier.padding(2.dp) else Modifier.size(slotSize + 4.dp))
             .graphicsLayer { rotationZ = wiggle.value }
             .pointerInput(Unit) {
                 awaitEachGesture {
@@ -361,6 +375,7 @@ private fun DockSlotTile(
         contentAlignment = Alignment.Center
     ) {
         when {
+            style.isSkin                 -> SkinSlotContent(style, slot, slotSize)
             // Aurora keeps the apps' real icons (squircle + hairline, see AppTile) so they stay
             // recognisable; only the empty slot uses the design's "+" tile.
             aurora && slot == DockSlot.Empty -> AuroraAddTile(slotSize, shape)

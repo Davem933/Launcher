@@ -57,6 +57,11 @@ import com.example.carlauncher.ui.launcher.LauncherScreen
 import com.example.carlauncher.ui.aurora.AuroraLauncherScreen
 import com.example.carlauncher.ui.aurora.AuroraFloatingDockInset
 import com.example.carlauncher.ui.aurora.AuroraMapScreen
+import com.example.carlauncher.ui.skin.DashHomeScreen
+import com.example.carlauncher.ui.skin.LightHomeScreen
+import com.example.carlauncher.ui.skin.TrioHomeScreen
+import com.example.carlauncher.ui.skin.skinBackground
+import com.example.carlauncher.ui.skin.skinPageDots
 import com.example.carlauncher.data.model.DockPosition
 import com.example.carlauncher.data.model.LauncherStyle
 import com.example.carlauncher.ui.theme.CarLauncherTheme
@@ -162,6 +167,13 @@ class MainActivity : ComponentActivity() {
                     val dockFloating = launcherStyle == LauncherStyle.AURORA_MAP &&
                         dockPosition == DockPosition.BOTTOM
                     val nonMapPagePadding = if (dockFloating) AuroraFloatingDockInset else 0.dp
+                    // The "Car Launcher" skins have their own incident button on the home page,
+                    // so the draggable FAB stays hidden for them.
+                    // Remembered so the skins' map chrome (2c) isn't rebuilt on every recomposition.
+                    val openIncident: (() -> Unit)? = remember(incidentEnabled) {
+                        if (incidentEnabled) ({ showIncidentRecorder = true }) else null
+                    }
+                    val (activeDot, inactiveDot) = skinPageDots(launcherStyle)
 
                     Box(modifier = Modifier.fillMaxSize()) {
                         // Dock sits OUTSIDE the pager so it stays fixed while the pages swipe.
@@ -169,7 +181,8 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier
                                 .fillMaxSize()
                                 .background(
-                                    if (launcherStyle.isAurora) Color.Black else CarColors.Bg
+                                    skinBackground(launcherStyle)
+                                        ?: if (launcherStyle.isAurora) Color.Black else CarColors.Bg
                                 ),
                             onLaunchSplitScreen = { pkg1, pkg2 -> launchSplitScreen(pkg1, pkg2) }
                         ) {
@@ -191,6 +204,18 @@ class MainActivity : ComponentActivity() {
                                             )
                                             LauncherStyle.AURORA_MAP -> AuroraMapScreen(
                                                 dockFloating = dockFloating,
+                                                onMapTouchActiveChanged = { active -> mapTouchActive = active }
+                                            )
+                                            LauncherStyle.LIGHT -> LightHomeScreen(
+                                                onOpenIncident = openIncident,
+                                                onMapTouchActiveChanged = { active -> mapTouchActive = active }
+                                            )
+                                            LauncherStyle.DASH -> DashHomeScreen(
+                                                onOpenIncident = openIncident,
+                                                onMapTouchActiveChanged = { active -> mapTouchActive = active }
+                                            )
+                                            LauncherStyle.TRIO -> TrioHomeScreen(
+                                                onOpenIncident = openIncident,
                                                 onMapTouchActiveChanged = { active -> mapTouchActive = active }
                                             )
                                         }
@@ -217,8 +242,8 @@ class MainActivity : ComponentActivity() {
                                                 .size(6.dp)
                                                 .clip(CircleShape)
                                                 .background(
-                                                    if (pagerState.currentPage == i) Color.White
-                                                    else Color.White.copy(alpha = 0.35f)
+                                                    if (pagerState.currentPage == i) activeDot
+                                                    else inactiveDot
                                                 )
                                         )
                                     }
@@ -250,7 +275,7 @@ class MainActivity : ComponentActivity() {
                         }
 
                         // Incident Recorder — draggable floating entry point (feature-flagged)
-                        if (incidentEnabled && !showIncidentRecorder) {
+                        if (incidentEnabled && !showIncidentRecorder && !launcherStyle.isSkin) {
                             IncidentFab(onOpen = { showIncidentRecorder = true })
                         }
 

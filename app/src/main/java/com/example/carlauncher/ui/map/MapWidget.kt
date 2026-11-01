@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -171,8 +172,7 @@ private val END_GUIDANCE_BUTTON_PADDING = 18.dp
 // "Locate me" button (autozen-style). Free-drive bottom padding matches the other free-drive
 // overlay padding (16dp). During navigation it must clear MapboxTripProgressView, which spans
 // the full BottomCenter width at 64dp tall — 24dp of margin above that keeps the button from
-// visually touching the progress bar.
-private val LOCATE_BUTTON_PADDING = 16.dp
+// visually touching the progress bar. The free-drive padding itself is MapChrome.locatePadding.
 private val LOCATE_BUTTON_BOTTOM_PADDING_NAV = 64.dp + 24.dp
 
 private class MapState {
@@ -237,6 +237,7 @@ fun MapWidget(
     // Škálovaná (UI) density – EdgeInsets jsou v pixelech a kryjí Compose prvky, které se škálují
     // přes DeviceScaleProvider; resources.displayMetrics.density by škálování obešlo.
     val uiDensity = LocalDensity.current.density
+    val chrome = LocalMapChrome.current
     val insetEndDp = overlayInsets.calculateEndPadding(LayoutDirection.Ltr).value.toDouble()
     val insetBottomDp = overlayInsets.calculateBottomPadding().value.toDouble()
     val insetTopDp = overlayInsets.calculateTopPadding().value.toDouble()
@@ -613,8 +614,11 @@ fun MapWidget(
 
     Box(
         modifier = if (fullBleed) modifier else modifier
-            .clip(RoundedCornerShape(24.dp))
-            .border(width = 1.dp, color = Color(0xFF2A2C35), shape = RoundedCornerShape(24.dp))
+            .clip(chrome.panelShape)
+            .then(
+                chrome.panelBorder?.let { Modifier.border(width = 1.dp, color = it, shape = chrome.panelShape) }
+                    ?: Modifier
+            )
     ) {
         AndroidView(
             factory = {
@@ -694,8 +698,13 @@ fun MapWidget(
                         // preset rather than following real-world time of day, and make sure
                         // 3D buildings/landmarks render (the point of switching to Standard).
                         style.setStyleImportConfigProperty(
-                            TileConfig.STANDARD_IMPORT_ID, "lightPreset", Value.valueOf("night")
+                            TileConfig.STANDARD_IMPORT_ID, "lightPreset", Value.valueOf(chrome.lightPreset)
                         )
+                        if (chrome.mapTheme != "default") {
+                            style.setStyleImportConfigProperty(
+                                TileConfig.STANDARD_IMPORT_ID, "theme", Value.valueOf(chrome.mapTheme)
+                            )
+                        }
                         style.setStyleImportConfigProperty(
                             TileConfig.STANDARD_IMPORT_ID, "show3dObjects", Value.valueOf(true)
                         )
@@ -836,9 +845,13 @@ fun MapWidget(
                 Column(
                     modifier = Modifier
                         .align(Alignment.TopStart)
+                        .then(if (chrome.searchFillWidth) Modifier.fillMaxWidth() else Modifier)
                         .padding(16.dp)
                 ) {
-                    DestinationSearchBar(onClick = { searchExpanded = true })
+                    DestinationSearchBar(
+                        onClick = { searchExpanded = true },
+                        modifier = if (chrome.searchFillWidth) Modifier.fillMaxWidth() else Modifier,
+                    )
                     if (routeRequestError != null) {
                         Text(
                             text = routeRequestError.orEmpty(),
@@ -1026,17 +1039,30 @@ fun MapWidget(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(
-                        end = LOCATE_BUTTON_PADDING,
-                        bottom = if (isNavigating) LOCATE_BUTTON_BOTTOM_PADDING_NAV else LOCATE_BUTTON_PADDING,
+                        end = chrome.locatePadding,
+                        bottom = if (isNavigating) LOCATE_BUTTON_BOTTOM_PADDING_NAV else chrome.locatePadding,
                     )
-                    .clip(CircleShape)
-                    .background(if (isLocationFollowing) CarColors.Accent else CarColors.Surface2)
+                    .then(chrome.locateSize?.let { Modifier.size(it) } ?: Modifier)
+                    .clip(chrome.locateShape)
+                    .background(if (isLocationFollowing) chrome.locateActiveBg else chrome.locateIdleBg)
             ) {
                 Icon(
                     imageVector = Icons.Default.MyLocation,
                     contentDescription = "Moje poloha",
-                    tint = CarColors.Text
+                    tint = if (isLocationFollowing) chrome.locateActiveFg else chrome.locateIdleFg
                 )
+            }
+
+            val extraAction = chrome.extraAction
+            if (extraAction != null && !isNavigating) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(
+                            end = chrome.locatePadding + (chrome.locateSize ?: 48.dp) + 12.dp,
+                            bottom = chrome.locatePadding,
+                        )
+                ) { extraAction() }
             }
         }
     }

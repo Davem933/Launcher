@@ -45,6 +45,22 @@ fun DockScaffold(
             )
         }
 
+        // Přístrojová deska (2b): the dock is the top bar, a 1dp hairline above the panels.
+        position == DockPosition.BOTTOM && style == LauncherStyle.DASH -> Column(modifier = modifier) {
+            DockBar(onLaunchSplitScreen = onLaunchSplitScreen)
+            Box(modifier = Modifier.fillMaxWidth().padding(top = 1.dp).weight(1f)) { content() }
+        }
+
+        // Světlý / Tři sloupce (2a, 2c): the pill sits in the page's 12dp grid.
+        position == DockPosition.BOTTOM && style.isSkin -> Column(modifier = modifier) {
+            Box(modifier = Modifier.fillMaxWidth().weight(1f)) { content() }
+            DockBar(
+                // The page above already pads 12dp at its bottom edge.
+                modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
+                onLaunchSplitScreen = onLaunchSplitScreen
+            )
+        }
+
         position == DockPosition.BOTTOM -> Column(modifier = modifier) {
             Box(modifier = Modifier.fillMaxWidth().weight(1f)) { content() }
             DockBar(
@@ -59,7 +75,7 @@ fun DockScaffold(
         else -> Row(modifier = modifier) {
             DockBar(
                 // Aurora's black dock column runs flush to the screen edge.
-                modifier = if (style.isAurora) Modifier
+                modifier = if (style.isAurora || style.isSkin) Modifier
                            else Modifier.padding(start = 12.dp),
                 onLaunchSplitScreen = onLaunchSplitScreen
             )

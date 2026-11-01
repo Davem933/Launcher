@@ -25,6 +25,9 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.ViewColumn
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
@@ -275,12 +278,18 @@ private fun LauncherStyle.label(): String = when (this) {
     LauncherStyle.CLASSIC -> "Klasický"
     LauncherStyle.AURORA  -> "Aurora"
     LauncherStyle.AURORA_MAP -> "Aurora – mapa přes celou plochu"
+    LauncherStyle.LIGHT -> "Světlý – mapa vpravo, dok jako pilulka"
+    LauncherStyle.DASH  -> "Přístrojová deska – dok nahoře"
+    LauncherStyle.TRIO  -> "Tři sloupce"
 }
 
 private fun LauncherStyle.icon(): ImageVector = when (this) {
     LauncherStyle.CLASSIC -> Icons.Default.Dashboard
     LauncherStyle.AURORA  -> Icons.Default.AutoAwesome
     LauncherStyle.AURORA_MAP -> Icons.Default.Map
+    LauncherStyle.LIGHT -> Icons.Default.LightMode
+    LauncherStyle.DASH  -> Icons.Default.Speed
+    LauncherStyle.TRIO  -> Icons.Default.ViewColumn
 }
 
 @Composable
